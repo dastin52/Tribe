@@ -62,9 +62,8 @@ const App: React.FC = () => {
       streak: prev.streak + 1
     }));
     
-    // В полноценном приложении здесь был бы вызов метода обновления прогресса в сторе
     setSelectedGoal(null);
-    alert('Прогресс зафиксирован! +150 XP');
+    alert('Прогресс зафиксирован! Вы получили +150 XP');
   };
 
   const renderLanding = () => (
@@ -83,7 +82,7 @@ const App: React.FC = () => {
           onClick={() => store.startFresh()}
           className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-3"
         >
-          НАЧАТЬ
+          НАЧАТЬ ПУТЬ
         </button>
         <button 
           onClick={() => store.startDemo()}
@@ -254,7 +253,7 @@ const App: React.FC = () => {
 
                {store.goals.length > 0 && (
                  <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Главная цель</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Актуальная цель</h3>
                     <div 
                       onClick={() => setSelectedGoal(store.goals[0])}
                       className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 cursor-pointer active:scale-[0.98] transition-all"
@@ -283,7 +282,7 @@ const App: React.FC = () => {
                </div>
                <div>
                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">{store.user.name}</h3>
-                 <p className="text-sm text-slate-400 font-medium">Амбассадор Племени</p>
+                 <p className="text-sm text-slate-400 font-medium">Адепт Племени</p>
                </div>
                <div className="grid grid-cols-2 gap-3">
                   <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
@@ -296,7 +295,7 @@ const App: React.FC = () => {
                   </div>
                </div>
                <button onClick={() => window.location.reload()} className="w-full py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl active:bg-rose-50 transition-colors">
-                 Сбросить сессию
+                 Сбросить и выйти
                </button>
             </div>
           )}
@@ -320,7 +319,7 @@ const App: React.FC = () => {
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                  <i className="fa-solid fa-chevron-left"></i>
               </button>
-              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Цель</h3>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Детали</h3>
               <div className="w-10"></div>
            </header>
            
@@ -333,10 +332,10 @@ const App: React.FC = () => {
               <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white space-y-6 shadow-2xl">
                  <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Прогресс года</span>
-                    <span className="text-3xl font-black tracking-tighter">{Math.round((selectedGoal.current_value / selectedGoal.target_value) * 100)}%</span>
+                    <span className="text-3xl font-black tracking-tighter">{Math.round((selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100)}%</span>
                  </div>
                  <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${(selectedGoal.current_value / selectedGoal.target_value) * 100}%` }}></div>
+                    <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${(selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100}%` }}></div>
                  </div>
                  <div className="text-center text-xs font-bold text-slate-400 uppercase tracking-tighter">
                     {selectedGoal.current_value.toLocaleString()} / {selectedGoal.target_value.toLocaleString()} {selectedGoal.metric}
@@ -355,7 +354,7 @@ const App: React.FC = () => {
                               </div>
                               <div>
                                   <div className="text-sm font-black text-slate-800 leading-tight">{sg.title}</div>
-                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вклад: {sg.weight}%</div>
+                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вес: {sg.weight}%</div>
                               </div>
                             </div>
                             <i className="fa-solid fa-circle-check text-slate-200 text-xl"></i>
@@ -363,7 +362,7 @@ const App: React.FC = () => {
                       ))
                     ) : (
                       <div className="p-10 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <p className="text-xs text-slate-400 font-bold italic">План формируется автоматически при создании...</p>
+                        <p className="text-xs text-slate-400 font-bold italic">Для этой цели еще не сформирован детальный план...</p>
                       </div>
                     )}
                  </div>
@@ -375,7 +374,7 @@ const App: React.FC = () => {
                 onClick={() => handleUpdateProgress(selectedGoal.id)}
                 className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase tracking-widest text-sm"
               >
-                 ЗАФИКСИРОВАТЬ ПРОГРЕСС
+                 ОТМЕТИТЬ ПРОГРЕСС
               </button>
            </footer>
         </div>
