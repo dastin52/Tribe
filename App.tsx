@@ -71,7 +71,7 @@ const App: React.FC = () => {
           <div className="w-24 h-24 bg-indigo-600 rounded-[2.5rem] flex items-center justify-center text-white text-4xl mb-6 mx-auto shadow-2xl rotate-3">
             <i className="fa-solid fa-mountain-sun"></i>
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-4">TRIBE</h1>
+          <h1 className="text-5xl font-black text-slate-900 tracking-tighter mb-4 uppercase">Tribe</h1>
           <p className="text-slate-500 font-medium max-w-[240px] mx-auto leading-tight text-lg">
             Достигай целей через энергию своего племени
           </p>
@@ -130,15 +130,15 @@ const App: React.FC = () => {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Активные цели</h3>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Твои цели</h3>
             </div>
             {store.goals.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
-                <p className="text-xs font-bold text-slate-400 uppercase">Нет целей</p>
+                <p className="text-xs font-bold text-slate-400 uppercase">Целей пока нет</p>
               </div>
             ) : (
-              store.goals.slice(0, 2).map(goal => (
-                <div key={goal.id} onClick={() => setSelectedGoal(goal)} className="p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer">
+              store.goals.slice(0, 3).map(goal => (
+                <div key={goal.id} onClick={() => setSelectedGoal(goal)} className="p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer active:scale-98 transition-all">
                   <div className="flex-1">
                     <span className="text-[9px] font-bold text-slate-400 uppercase block mb-1">{goal.category}</span>
                     <h4 className="font-bold text-slate-800 leading-tight">{goal.title}</h4>
@@ -164,7 +164,7 @@ const App: React.FC = () => {
 
           <div className="space-y-4">
             {store.goals.map(goal => (
-              <div key={goal.id} onClick={() => setSelectedGoal(goal)} className="p-8 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+              <div key={goal.id} onClick={() => setSelectedGoal(goal)} className="p-8 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4 cursor-pointer">
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[9px] font-black text-indigo-500 uppercase">{goal.category}</span>
@@ -217,7 +217,7 @@ const App: React.FC = () => {
             <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
               <i className="fa-solid fa-chevron-left"></i>
             </button>
-            <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest">Цель</h3>
+            <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest">Детали</h3>
             <div className="w-10"></div>
           </header>
           
