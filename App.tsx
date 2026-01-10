@@ -62,9 +62,13 @@ const App: React.FC = () => {
       streak: prev.streak + 1
     }));
     
-    // В реальном приложении здесь был бы вызов метода обновления прогресса в сторе
-    setSelectedGoal(null);
-    alert('Прогресс зафиксирован! +150 XP');
+    // Временная имитация обновления прогресса в UI
+    if (selectedGoal) {
+      const updatedValue = Math.min(selectedGoal.target_value, selectedGoal.current_value + (selectedGoal.target_value * 0.05));
+      // В полноценном приложении здесь был бы store.updateGoal
+      setSelectedGoal(null);
+      alert('Прогресс успешно зафиксирован! Вы получили +150 XP');
+    }
   };
 
   const renderLanding = () => (
@@ -317,7 +321,7 @@ const App: React.FC = () => {
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                  <i className="fa-solid fa-chevron-left"></i>
               </button>
-              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Детали цели</h3>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Просмотр цели</h3>
               <div className="w-10"></div>
            </header>
            
@@ -341,7 +345,7 @@ const App: React.FC = () => {
               </div>
 
               <section className="space-y-4">
-                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Этапы реализации</h3>
+                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">План декомпозиции</h3>
                  <div className="space-y-3">
                     {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).length > 0 ? (
                       store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map((sg, i) => (
@@ -352,15 +356,15 @@ const App: React.FC = () => {
                               </div>
                               <div>
                                   <div className="text-sm font-black text-slate-800 leading-tight">{sg.title}</div>
-                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вес этапа: {sg.weight}%</div>
+                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вклад в цель: {sg.weight}%</div>
                               </div>
                             </div>
-                            <i className="fa-solid fa-circle-check text-slate-100 text-xl"></i>
+                            <i className="fa-solid fa-circle-check text-slate-200 text-xl"></i>
                         </div>
                       ))
                     ) : (
-                      <div className="p-8 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <p className="text-xs text-slate-400 italic">План декомпозиции формируется автоматически...</p>
+                      <div className="p-10 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <p className="text-xs text-slate-400 font-bold italic">План формируется автоматически при создании цели...</p>
                       </div>
                     )}
                  </div>
@@ -372,7 +376,7 @@ const App: React.FC = () => {
                 onClick={() => handleUpdateProgress(selectedGoal.id)}
                 className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase tracking-widest text-sm"
               >
-                 ЗАФИКСИРОВАТЬ ПРОГРЕСС
+                 ОТМЕТИТЬ ПРОГРЕСС
               </button>
            </footer>
         </div>
