@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { User, Value, YearGoal, Action, AppView, ProgressLog, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction } from '../types';
+import { User, Value, YearGoal, Action, AppView, ProgressLog, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project } from '../types';
 import { geminiService } from '../services/gemini';
 
 const INITIAL_USER: User = {
@@ -33,6 +32,8 @@ export function useStore() {
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [values, setValues] = useState<Value[]>([]);
   const [goals, setGoals] = useState<YearGoal[]>([]);
+  const [subgoals, setSubgoals] = useState<SubGoal[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [partners, setPartners] = useState<AccountabilityPartner[]>(DEFAULT_PARTNERS);
   const [reviews, setReviews] = useState<PartnerReview[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -44,6 +45,8 @@ export function useStore() {
     const saved = {
       values: localStorage.getItem('tribe_values'),
       goals: localStorage.getItem('tribe_goals'),
+      subgoals: localStorage.getItem('tribe_subgoals'),
+      projects: localStorage.getItem('tribe_projects'),
       user: localStorage.getItem('tribe_user'),
       reviews: localStorage.getItem('tribe_reviews'),
       debts: localStorage.getItem('tribe_debts'),
@@ -55,6 +58,8 @@ export function useStore() {
     if (saved.user) setUser(JSON.parse(saved.user));
     if (saved.values) setValues(JSON.parse(saved.values));
     if (saved.goals) setGoals(JSON.parse(saved.goals));
+    if (saved.subgoals) setSubgoals(JSON.parse(saved.subgoals));
+    if (saved.projects) setProjects(JSON.parse(saved.projects));
     if (saved.reviews) setReviews(JSON.parse(saved.reviews));
     if (saved.debts) setDebts(JSON.parse(saved.debts));
     if (saved.subs) setSubscriptions(JSON.parse(saved.subs));
@@ -68,6 +73,8 @@ export function useStore() {
     if (!loading) {
       localStorage.setItem('tribe_values', JSON.stringify(values));
       localStorage.setItem('tribe_goals', JSON.stringify(goals));
+      localStorage.setItem('tribe_subgoals', JSON.stringify(subgoals));
+      localStorage.setItem('tribe_projects', JSON.stringify(projects));
       localStorage.setItem('tribe_user', JSON.stringify(user));
       localStorage.setItem('tribe_reviews', JSON.stringify(reviews));
       localStorage.setItem('tribe_debts', JSON.stringify(debts));
@@ -75,7 +82,7 @@ export function useStore() {
       localStorage.setItem('tribe_partners', JSON.stringify(partners));
       localStorage.setItem('tribe_txs', JSON.stringify(transactions));
     }
-  }, [values, goals, user, reviews, debts, subscriptions, partners, transactions, loading]);
+  }, [values, goals, subgoals, projects, user, reviews, debts, subscriptions, partners, transactions, loading]);
 
   const awardXP = (amount: number) => {
     setUser(prev => {
@@ -96,7 +103,6 @@ export function useStore() {
     };
     setTransactions(prev => [newTx, ...prev]);
 
-    // Update assets based on income/expense
     setUser(prev => {
       if (!prev.financials) return prev;
       const amountChange = tx.type === 'income' ? tx.amount : -tx.amount;
@@ -165,6 +171,8 @@ export function useStore() {
     setUser({ ...INITIAL_USER, is_demo: false });
     setValues([]);
     setGoals([]);
+    setSubgoals([]);
+    setProjects([]);
     setReviews([]);
     setDebts([]);
     setSubscriptions([]);
@@ -172,8 +180,11 @@ export function useStore() {
     setView(AppView.VALUES);
   };
 
-  const addGoal = (g: YearGoal) => {
-    setGoals(prev => [...prev, g]);
+  const addGoalWithPlan = (goal: YearGoal, sgs: SubGoal[], projs: Project[]) => {
+    setGoals(prev => [...prev, goal]);
+    setSubgoals(prev => [...prev, ...sgs]);
+    setProjects(prev => [...prev, ...projs]);
+    awardXP(500);
   };
 
   const addPartnerReview = (review: Omit<PartnerReview, 'id' | 'timestamp'>) => {
@@ -199,8 +210,9 @@ export function useStore() {
   };
 
   return {
-    user, setUser, view, setView, values, goals, addGoal, partners, reviews, 
+    user, setUser, view, setView, values, goals, addGoalWithPlan, partners, reviews, 
     addPartnerReview, loading, startDemo, startFresh, debts, subscriptions, transactions, addTransaction,
+    subgoals, projects,
     refreshSocialInsight: async () => {}
   };
 }

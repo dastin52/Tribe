@@ -113,21 +113,50 @@ const App: React.FC = () => {
           НАЧАТЬ С НУЛЯ
         </button>
       </div>
+    </div>
+  );
 
-      <div className="flex gap-8 text-slate-300">
-        <div className="flex flex-col items-center gap-1">
-          <i className="fa-solid fa-shield-halved text-2xl"></i>
-          <span className="text-[10px] font-black uppercase tracking-widest">Безопасно</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <i className="fa-solid fa-brain text-2xl"></i>
-          <span className="text-[10px] font-black uppercase tracking-widest">AI Анализ</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <i className="fa-solid fa-users text-2xl"></i>
-          <span className="text-[10px] font-black uppercase tracking-widest">Племя</span>
-        </div>
+  const renderGoals = () => (
+    <div className="space-y-6 pb-12 animate-fade-in">
+      <div className="flex justify-between items-center px-1">
+          <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Цели</h2>
+          <button onClick={() => setShowWizard(true)} className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all">
+            <i className="fa-solid fa-plus"></i>
+          </button>
       </div>
+
+      {store.goals.length === 0 ? (
+        <div className="p-10 bg-slate-50 rounded-[3rem] text-center border-2 border-dashed border-slate-200">
+           <i className="fa-solid fa-bullseye text-slate-300 text-4xl mb-4"></i>
+           <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Нет активных целей</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {store.goals.map(g => (
+            <div key={g.id} className="p-6 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">{g.category}</span>
+                  <h4 className="font-black text-slate-800 text-lg">{g.title}</h4>
+                </div>
+                <div className="text-2xl font-black text-indigo-600">{Math.round((g.current_value / (g.target_value || 1)) * 100)}%</div>
+              </div>
+              
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-indigo-600 transition-all duration-1000" 
+                  style={{ width: `${Math.min(100, (g.current_value / (g.target_value || 1)) * 100)}%` }}
+                ></div>
+              </div>
+              
+              <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase">
+                <span>Прогресс: {g.current_value} / {g.target_value} {g.metric}</span>
+                <span>Доверие: {g.confidence_level}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -156,55 +185,13 @@ const App: React.FC = () => {
              ))}
           </div>
        </section>
-
-       <section className="space-y-4">
-          <div className="flex justify-between items-center px-1">
-             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Последние отзывы</h3>
-          </div>
-          
-          {store.reviews.length === 0 ? (
-             <div className="p-10 bg-slate-50 rounded-[3rem] text-center border-2 border-dashed border-slate-200">
-                <i className="fa-solid fa-comments text-slate-300 text-4xl mb-4"></i>
-                <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Пока нет отзывов</p>
-             </div>
-          ) : (
-             <div className="space-y-4">
-                {store.reviews.map(review => {
-                   const partner = store.partners.find(p => p.id === review.partner_id);
-                   return (
-                      <div key={review.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm space-y-3">
-                         <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                               <div className={`w-10 h-10 rounded-full ${partner ? roleMeta[partner.role].bg : 'bg-slate-100'} flex items-center justify-center text-xl`}>
-                                  {partner ? roleMeta[partner.role].emoji : '👤'}
-                               </div>
-                               <div>
-                                  <h4 className="font-black text-slate-800 text-sm">{partner?.name || 'Аноним'}</h4>
-                                  <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(review.timestamp).toLocaleDateString()}</span>
-                               </div>
-                            </div>
-                            <div className="text-xl">
-                              {review.reaction === 'fire' && '🔥'}
-                              {review.reaction === 'strong' && '💪'}
-                            </div>
-                         </div>
-                         <p className="text-sm text-slate-600 font-medium leading-relaxed italic">"{review.comment}"</p>
-                      </div>
-                   );
-                })}
-             </div>
-          )}
-       </section>
     </div>
   );
 
   const renderFinanceView = () => (
     <div className="space-y-6 animate-fade-in pb-12">
-       <div className="px-1 flex justify-between items-center">
-          <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Капитал</h2>
-            <p className="text-sm text-slate-500 mt-1">Твое финансовое будущее.</p>
-          </div>
+       <div className="px-1">
+          <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Капитал</h2>
        </div>
 
        <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto no-scrollbar">
@@ -237,88 +224,6 @@ const App: React.FC = () => {
                    </ResponsiveContainer>
                 </div>
              </div>
-
-             <div className="grid grid-cols-2 gap-4">
-                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
-                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-2">Доходы</span>
-                   <div className="text-xl font-black text-slate-800">{financials.monthly_income.toLocaleString()}</div>
-                </div>
-                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
-                   <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest block mb-2">Расходы</span>
-                   <div className="text-xl font-black text-slate-800">{financials.monthly_expenses.toLocaleString()}</div>
-                </div>
-             </div>
-          </div>
-       )}
-
-       {financeTab === 'planning' && (
-          <div className="space-y-6 animate-fade-in">
-             <div className="p-8 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] text-white shadow-xl space-y-6">
-                <div className="space-y-1">
-                   <span className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Вечный пассивный доход</span>
-                   <h3 className="text-3xl font-black tracking-tighter">Свобода: {planningMetrics.fireCapitalToday.toLocaleString()} {financials.currency}</h3>
-                </div>
-
-                <div className="space-y-3">
-                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                      <span>Прогресс</span>
-                      <span>{planningMetrics.fireCoverage}%</span>
-                   </div>
-                   <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
-                      <div className="h-full bg-white transition-all duration-1000" style={{ width: `${planningMetrics.fireCoverage}%` }}></div>
-                   </div>
-                </div>
-             </div>
-
-             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
-                <div className="space-y-6">
-                   <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Доходность (%)</label>
-                         <span className="text-sm font-black text-indigo-600">{expectedYield}%</span>
-                      </div>
-                      <input 
-                         type="range" min="1" max="30" step="1"
-                         className="w-full accent-indigo-600"
-                         value={expectedYield}
-                         onChange={e => setExpectedYield(Number(e.target.value))}
-                      />
-                   </div>
-                   <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Горизонт (лет)</label>
-                         <span className="text-sm font-black text-slate-900">{planYears}</span>
-                      </div>
-                      <input 
-                         type="range" min="1" max="30" step="1"
-                         className="w-full accent-slate-900"
-                         value={planYears}
-                         onChange={e => setPlanYears(Number(e.target.value))}
-                      />
-                   </div>
-                </div>
-             </div>
-          </div>
-       )}
-
-       {financeTab === 'operations' && (
-          <div className="space-y-4 animate-fade-in">
-             {store.transactions.map(tx => (
-                <div key={tx.id} className="p-5 bg-white border border-slate-50 rounded-3xl shadow-sm flex justify-between items-center">
-                   <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                         <i className={`fa-solid ${catIcons[tx.category] || 'fa-receipt'}`}></i>
-                      </div>
-                      <div>
-                         <h4 className="font-black text-slate-800 text-sm">{tx.category}</h4>
-                         <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(tx.timestamp).toLocaleDateString()}</span>
-                      </div>
-                   </div>
-                   <div className={`text-sm font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                      {tx.type === 'income' ? '+' : '-'}{tx.amount.toLocaleString()} {financials.currency}
-                   </div>
-                </div>
-             ))}
           </div>
        )}
     </div>
@@ -337,6 +242,7 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-xs font-black text-slate-400 uppercase tracking-tighter">Уровень {store.user.level}</div>
+                      <div className="text-[10px] font-bold text-indigo-600">{store.user.xp} XP</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100">
@@ -355,23 +261,7 @@ const App: React.FC = () => {
           )}
           {store.view === AppView.SOCIAL && renderSocialFeedback()}
           {store.view === AppView.FINANCE && renderFinanceView()}
-          {store.view === AppView.GOALS && (
-             <div className="space-y-6 pb-12 animate-fade-in">
-                <div className="flex justify-between items-center">
-                   <h2 className="text-2xl font-black text-slate-800">Цели</h2>
-                   <button onClick={() => setShowWizard(true)} className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center"><i className="fa-solid fa-plus"></i></button>
-                </div>
-                {store.goals.map(g => (
-                   <div key={g.id} className="p-6 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm flex justify-between items-center">
-                      <div>
-                         <span className="text-[9px] font-black text-slate-400 uppercase">{g.category}</span>
-                         <h4 className="font-black text-slate-800">{g.title}</h4>
-                      </div>
-                      <div className="text-2xl font-black text-indigo-600">{Math.round((g.current_value / (g.target_value || 1)) * 100)}%</div>
-                   </div>
-                ))}
-             </div>
-          )}
+          {store.view === AppView.GOALS && renderGoals()}
           {store.view === AppView.SETTINGS && (
             <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-4 animate-fade-in">
                <div className="w-20 h-20 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-3xl font-black">{store.user.name[0]}</div>
@@ -387,8 +277,7 @@ const App: React.FC = () => {
           values={store.values} 
           onCancel={() => setShowWizard(false)} 
           onComplete={(g, subgoals, projects) => { 
-            store.addGoal(g); 
-            // Here you could also store subgoals and projects if the store supports it
+            store.addGoalWithPlan(g, subgoals, projects); 
             setShowWizard(false); 
           }} 
         />
