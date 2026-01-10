@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from './store/useStore';
-import { AppView, YearGoal, AccountabilityPartner, PartnerRole, Transaction, SubGoal, Project } from './types';
+import { AppView, YearGoal, PartnerRole } from './types';
 import { Layout } from './components/Layout';
 import { GoalWizard } from './components/GoalWizard';
 import { 
@@ -62,8 +62,7 @@ const App: React.FC = () => {
       streak: prev.streak + 1
     }));
     
-    // Симуляция обновления данных в сторе
-    // В реальном приложении это должно идти через store.updateGoal
+    // В реальном приложении здесь был бы вызов метода обновления прогресса в сторе
     setSelectedGoal(null);
     alert('Прогресс зафиксирован! +150 XP');
   };
@@ -360,7 +359,9 @@ const App: React.FC = () => {
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-slate-400 italic text-center py-4">План декомпозиции формируется автоматически...</p>
+                      <div className="p-8 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <p className="text-xs text-slate-400 italic">План декомпозиции формируется автоматически...</p>
+                      </div>
                     )}
                  </div>
               </section>
