@@ -55,15 +55,17 @@ const App: React.FC = () => {
     }).slice(-10);
   }, [store.transactions, netWorth]);
 
-  const updateGoalProgress = (goalId: string, newValue: number) => {
-    // В реальном приложении здесь был бы вызов метода хранилища
+  const handleUpdateProgress = (goalId: string) => {
     store.setUser(prev => ({
       ...prev,
-      xp: prev.xp + 100,
+      xp: prev.xp + 150,
       streak: prev.streak + 1
     }));
-    // Для демо-целей мы просто закрываем модалку, имитируя успех
+    
+    // Симуляция обновления данных в сторе
+    // В реальном приложении это должно идти через store.updateGoal
     setSelectedGoal(null);
+    alert('Прогресс зафиксирован! +150 XP');
   };
 
   const renderLanding = () => (
@@ -73,7 +75,7 @@ const App: React.FC = () => {
           TRIBE
         </h1>
         <p className="text-slate-500 font-medium max-w-xs mx-auto">
-          Твоя личная операционная система для достижения целей через ценности и поддержку окружения.
+          Твоя личная операционная система для достижения целей через ценности и поддержку племени.
         </p>
       </div>
 
@@ -316,7 +318,7 @@ const App: React.FC = () => {
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                  <i className="fa-solid fa-chevron-left"></i>
               </button>
-              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">План реализации</h3>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Детали цели</h3>
               <div className="w-10"></div>
            </header>
            
@@ -340,7 +342,7 @@ const App: React.FC = () => {
               </div>
 
               <section className="space-y-4">
-                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Этапы (Subgoals)</h3>
+                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Этапы реализации</h3>
                  <div className="space-y-3">
                     {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).length > 0 ? (
                       store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map((sg, i) => (
@@ -358,7 +360,7 @@ const App: React.FC = () => {
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-slate-400 italic text-center py-4">План декомпозиции в процессе формирования...</p>
+                      <p className="text-xs text-slate-400 italic text-center py-4">План декомпозиции формируется автоматически...</p>
                     )}
                  </div>
               </section>
@@ -366,10 +368,10 @@ const App: React.FC = () => {
 
            <footer className="p-6 border-t bg-white sticky bottom-0">
               <button 
-                onClick={() => updateGoalProgress(selectedGoal.id, selectedGoal.current_value + 1)}
+                onClick={() => handleUpdateProgress(selectedGoal.id)}
                 className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase tracking-widest text-sm"
               >
-                 ОТМЕТИТЬ ПРОГРЕСС
+                 ЗАФИКСИРОВАТЬ ПРОГРЕСС
               </button>
            </footer>
         </div>
