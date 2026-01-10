@@ -1,16 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from './store/useStore';
-import { AppView, GoalCategory, YearGoal, AccountabilityPartner, ProgressLog, PartnerRole } from './types';
+import { AppView, GoalCategory, YearGoal, AccountabilityPartner, ProgressLog, PartnerRole, Transaction, TransactionType } from './types';
 import { Layout } from './components/Layout';
-import { ValueCard } from './components/ValueCard';
 import { GoalWizard } from './components/GoalWizard';
-import { geminiService } from './services/gemini';
 import { 
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
-  ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, 
-  Tooltip, Cell, Legend
+  ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
+
+// Extend window for Telegram
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp: any;
+    };
+  }
+}
 
 const roleMeta: Record<PartnerRole, { label: string, emoji: string, color: string, bg: string }> = {
   accomplice: { label: 'Сообщник', emoji: '🤝', color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -21,12 +26,20 @@ const roleMeta: Record<PartnerRole, { label: string, emoji: string, color: strin
   roaster: { label: 'Критик', emoji: '🔥', color: 'text-orange-600', bg: 'bg-orange-50' },
 };
 
-const sphereLabels: Record<string, string> = {
-  finance: 'Финансы',
-  sport: 'Спорт',
-  growth: 'Рост',
-  work: 'Работа',
-  other: 'Прочее'
+const categories = {
+  income: ['Зарплата', 'Инвестиции', 'Подарок', 'Прочее'],
+  expense: ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Образование', 'Прочее']
+};
+
+const catIcons: Record<string, string> = {
+  'Зарплата': 'fa-money-bill-wave',
+  'Инвестиции': 'fa-chart-line',
+  'Продукты': 'fa-basket-shopping',
+  'Транспорт': 'fa-car',
+  'Жилье': 'fa-house',
+  'Развлечения': 'fa-clapperboard',
+  'Здоровье': 'fa-heart-pulse',
+  'Прочее': 'fa-ellipsis'
 };
 
 const App: React.FC = () => {
@@ -34,304 +47,413 @@ const App: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [reviewingLog, setReviewingLog] = useState<{goal: YearGoal, log: ProgressLog} | null>(null);
   const [selectedPartner, setSelectedPartner] = useState<AccountabilityPartner | null>(null);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '', reaction: 'fire' as any, is_verified: true });
-  const [synergyData, setSynergyData] = useState<any>(null);
-
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '', reaction: 'fire' as any });
+  const [financeTab, setFinanceTab] = useState<'overview' | 'operations' | 'planning' | 'debts' | 'subs'>('overview');
+  const [showAddTx, setShowAddTx] = useState(false);
+  
+  // Telegram Integration
   useEffect(() => {
-    if (store.view !== AppView.LANDING) {
-      store.handleCheckIn();
-      if (store.reviews.length > 0) store.refreshSocialInsight();
+    if (window.Telegram?.WebApp) {
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand(); // Expand to full height in Telegram
+      
+      // Sync theme colors with Telegram if needed
+      document.body.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
     }
-  }, [store.reviews.length, store.view]);
+  }, []);
 
-  useEffect(() => {
-    if (store.view === AppView.ANALYTICS && store.goals.length > 0) {
-      geminiService.analyzeCrossSphereSynergy(store.goals).then(setSynergyData);
-    }
-  }, [store.view]);
+  // Planning state
+  const [planYears, setPlanYears] = useState(1);
+  const [inflation, setInflation] = useState(10);
+  const [growth, setGrowth] = useState(15);
+  const [expectedYield, setExpectedYield] = useState(12); // Ожидаемая доходность капитала %
 
-  const getRadarData = () => {
-    const categories: GoalCategory[] = ['finance', 'sport', 'growth', 'work', 'other'];
-    return categories.map(cat => {
-      const catGoals = store.goals.filter(g => g.category === cat);
-      const avgProgress = catGoals.length 
-        ? catGoals.reduce((acc, g) => acc + (g.current_value / g.target_value), 0) / catGoals.length 
-        : 0;
+  const [newTx, setNewTx] = useState<Omit<Transaction, 'id' | 'timestamp'>>({
+    amount: 0,
+    type: 'expense',
+    category: categories.expense[0],
+    note: ''
+  });
+
+  const financials = store.user.financials || { total_assets: 0, total_debts: 0, monthly_income: 0, monthly_expenses: 0, currency: '₽' };
+  const netWorth = financials.total_assets - financials.total_debts;
+
+  const categoryData = useMemo(() => {
+    const expenses = store.transactions.filter(t => t.type === 'expense');
+    const grouped = expenses.reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+  }, [store.transactions]);
+
+  const balanceHistory = useMemo(() => {
+    const sorted = [...store.transactions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    let current = netWorth - store.transactions.reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0);
+    return sorted.map(t => {
+      current += (t.type === 'income' ? t.amount : -t.amount);
       return {
-        subject: sphereLabels[cat],
-        A: Math.min(100, Math.round(avgProgress * 100)),
-        fullMark: 100,
+        date: new Date(t.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        balance: current
       };
-    });
-  };
+    }).slice(-10);
+  }, [store.transactions, netWorth]);
 
-  const getScatterData = () => {
-    return store.goals.map(g => ({
-      name: g.title,
-      x: Math.round((g.current_value / g.target_value) * 100),
-      y: g.confidence_level,
-      z: g.target_value,
-      category: g.category
-    }));
-  };
+  // Comprehensive Financial Planning Logic
+  const planningMetrics = useMemo(() => {
+    const monthlyExp = financials.monthly_expenses || 1;
+    const monthlyInc = financials.monthly_income || 1;
+    
+    const i = inflation / 100;
+    const g = growth / 100;
+    const yRate = expectedYield / 100;
+    const n = planYears;
+    
+    const calculateTotal = (baseMonthly: number, rate: number, years: number) => {
+      if (years === 0.5) return baseMonthly * 6;
+      let total = 0;
+      let currentYearAmount = baseMonthly * 12;
+      for (let y = 0; y < Math.floor(years); y++) {
+        total += currentYearAmount * Math.pow(1 + rate, y);
+      }
+      const remaining = years - Math.floor(years);
+      if (remaining > 0) {
+        total += (baseMonthly * 12 * remaining) * Math.pow(1 + rate, Math.floor(years));
+      }
+      return total;
+    };
+
+    const neededForSurvival = calculateTotal(monthlyExp, i, n);
+    const neededForLifestylePeriod = calculateTotal(monthlyInc, g, n);
+
+    const fireCapitalToday = (monthlyInc * 12) / (yRate || 0.01);
+    const fireCapitalFuture = fireCapitalToday * Math.pow(1 + i, n);
+    const passiveMonthlyFuture = (fireCapitalFuture * yRate) / 12;
+
+    return { 
+      neededForSurvival: Math.round(neededForSurvival),
+      neededForLifestylePeriod: Math.round(neededForLifestylePeriod),
+      fireCapitalToday: Math.round(fireCapitalToday),
+      fireCapitalFuture: Math.round(fireCapitalFuture),
+      passiveMonthlyFuture: Math.round(passiveMonthlyFuture),
+      survivalCoverage: Math.min(100, Math.round((netWorth / (neededForSurvival || 1)) * 100)),
+      fireCoverage: Math.min(100, Math.round((netWorth / (fireCapitalToday || 1)) * 100))
+    };
+  }, [financials, planYears, inflation, growth, expectedYield, netWorth]);
 
   const renderLanding = () => (
-    <div className="fixed inset-0 bg-slate-900 z-[200] overflow-y-auto">
-       <div className="min-h-screen flex flex-col items-center justify-center p-8 space-y-12 animate-fade-in text-center">
-          <div className="space-y-4">
-             <h1 className="text-6xl font-black text-white tracking-tighter italic italic-uppercase">TRIBE</h1>
-             <div className="h-1 w-20 bg-indigo-500 mx-auto rounded-full"></div>
-             <p className="text-slate-400 font-medium max-w-xs mx-auto">Твое племя достижений. Социальная операционная система для твоей жизни.</p>
-          </div>
-
-          <div className="w-full max-w-xs space-y-4">
-             <button 
-               onClick={store.startDemo}
-               className="w-full py-5 bg-white text-slate-900 font-black rounded-[2rem] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3"
-             >
-                <i className="fa-solid fa-eye"></i>
-                ПОСМОТРЕТЬ ДЕМО
-             </button>
-             <button 
-               onClick={store.startFresh}
-               className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
-             >
-                СОЗДАТЬ СВОЁ ПЛЕМЯ
-             </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 w-full">
-             <div className="p-6 bg-slate-800/50 rounded-3xl border border-white/5 space-y-2">
-                <i className="fa-solid fa-bolt-lightning text-amber-400 text-xl"></i>
-                <div className="text-[10px] font-black text-slate-500 uppercase">AI Аналитика</div>
-                <div className="text-xs text-slate-300 font-bold">Связи между спортом и карьерой</div>
-             </div>
-             <div className="p-6 bg-slate-800/50 rounded-3xl border border-white/5 space-y-2">
-                <i className="fa-solid fa-shield-halved text-emerald-400 text-xl"></i>
-                <div className="text-[10px] font-black text-slate-500 uppercase">Верификация</div>
-                <div className="text-xs text-slate-300 font-bold">Поддержка от близких (Племя)</div>
-             </div>
-          </div>
-       </div>
-    </div>
-  );
-
-  const renderDashboard = () => (
-    <div className="space-y-6 pb-12 animate-fade-in">
-      {store.user.is_demo && (
-        <div className="bg-indigo-600 text-white text-[10px] font-black py-1 px-4 rounded-full mx-auto w-max uppercase tracking-widest shadow-lg shadow-indigo-200">
-          Демо-режим активности
-        </div>
-      )}
-
-      {/* Header with XP and Streaks */}
-      <div className="flex items-center justify-between px-2 pt-2">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center text-white font-black shadow-lg">
-            {store.user.level}
-          </div>
-          <div>
-            <div className="text-xs font-black text-slate-400 uppercase tracking-tighter">Уровень {store.user.level}</div>
-            <div className="w-32 h-1.5 bg-slate-200 rounded-full mt-1 overflow-hidden">
-               <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${(store.user.xp / (store.user.level * 1000)) * 100}%` }}></div>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100 shadow-sm">
-           <i className="fa-solid fa-fire text-orange-500 animate-pulse"></i>
-           <span className="text-sm font-black text-orange-600">{store.user.streak} ДНЕЙ</span>
-        </div>
+    <div className="min-h-screen bg-[#fcfdfe] flex flex-col items-center justify-center p-8 text-center space-y-12">
+      <div className="space-y-4">
+        <h1 className="text-6xl font-black bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tighter">
+          TRIBE
+        </h1>
+        <p className="text-slate-500 font-medium max-w-xs mx-auto">
+          Твоя личная экосистема для достижения целей через ценности и социальное давление.
+        </p>
       </div>
 
-      {/* Social Insight Card */}
-      {store.socialInsight && (
-        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 p-6 rounded-[2.5rem] border border-indigo-100 shadow-sm relative overflow-hidden">
-          <div className="flex items-center gap-3 mb-3">
-             <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs">
-                <i className="fa-solid fa-users"></i>
-             </div>
-             <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Голос племени</span>
-          </div>
-          <p className="text-sm text-indigo-800 font-medium italic mb-2">"{store.socialInsight.summary}"</p>
-          <div className="flex items-center justify-between mt-4 bg-white/50 p-3 rounded-2xl">
-             <span className="text-[9px] font-bold text-slate-500 uppercase">Социальное доверие</span>
-             <span className="text-sm font-black text-indigo-600">{store.socialInsight.socialCredibilityScore}%</span>
-          </div>
-        </div>
-      )}
+      <div className="w-full max-w-xs space-y-4">
+        <button 
+          onClick={() => store.startDemo()}
+          className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-3"
+        >
+          ПОПРОБОВАТЬ ДЕМО
+        </button>
+        <button 
+          onClick={() => store.startFresh()}
+          className="w-full py-5 bg-white text-indigo-600 border-2 border-indigo-50 font-black rounded-[2rem] active:scale-95 transition-all"
+        >
+          НАЧАТЬ С НУЛЯ
+        </button>
+      </div>
 
-      {/* Verification Queue */}
-      {store.goals.some(g => g.logs.some(l => !l.is_verified)) && (
-        <section className="space-y-4">
-           <h3 className="text-lg font-black text-slate-800 px-1 flex items-center gap-2">
-             <i className="fa-solid fa-shield-halved text-amber-500"></i>
-             Нужна верификация
-           </h3>
-           <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-             {store.goals.flatMap(g => g.logs.filter(l => !l.is_verified).map(l => ({goal: g, log: l}))).map(({goal, log}) => (
-               <div key={log.id} 
-                    onClick={() => setReviewingLog({goal, log})}
-                    className="shrink-0 w-64 p-5 bg-white border border-slate-100 rounded-3xl shadow-sm space-y-3 active:scale-95 transition-all">
-                  <div className="flex justify-between items-center">
-                     <span className="text-[8px] font-black text-indigo-500 uppercase px-2 py-0.5 bg-indigo-50 rounded-full">{goal.category}</span>
-                     <span className="text-[8px] font-bold text-slate-400">{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-700">{goal.title}</h4>
-                  <div className="flex items-center gap-2">
-                     <span className="text-lg font-black text-slate-900">{log.value} {goal.metric}</span>
-                  </div>
-               </div>
-             ))}
-           </div>
-        </section>
-      )}
-
-      {/* Main Focus */}
-      <section className="space-y-4">
-        <h3 className="text-lg font-black text-slate-800 px-1">Ежедневный фокус</h3>
-        <div className="space-y-3">
-          {store.actions.filter(a => !a.completion_status).slice(0, 3).map(a => (
-            <div key={a.id} onClick={() => store.toggleAction(a.id)} className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4 active:scale-95 transition-all group">
-               <div className="w-7 h-7 rounded-xl border-2 border-slate-200 group-hover:border-indigo-400 transition-colors shrink-0 flex items-center justify-center">
-                  <i className="fa-solid fa-check text-indigo-500 opacity-0 group-hover:opacity-20"></i>
-               </div>
-               <span className="text-sm font-bold text-slate-700 flex-1">{a.title}</span>
-               <div className="bg-slate-50 px-3 py-1 rounded-lg text-[10px] font-black text-slate-400 uppercase">
-                  +{store.user.streak > 5 ? 75 : 50} XP
-               </div>
-            </div>
-          ))}
+      <div className="flex gap-8 text-slate-300">
+        <div className="flex flex-col items-center gap-1">
+          <i className="fa-solid fa-shield-halved text-2xl"></i>
+          <span className="text-[10px] font-black uppercase tracking-widest">Безопасно</span>
         </div>
-      </section>
+        <div className="flex flex-col items-center gap-1">
+          <i className="fa-solid fa-brain text-2xl"></i>
+          <span className="text-[10px] font-black uppercase tracking-widest">AI Анализ</span>
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <i className="fa-solid fa-users text-2xl"></i>
+          <span className="text-[10px] font-black uppercase tracking-widest">Племя</span>
+        </div>
+      </div>
     </div>
   );
 
-  const renderAnalytics = () => (
-    <div className="space-y-8 pb-12 animate-fade-in">
-       <div className="px-1">
-          <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Нексус</h2>
-          <p className="text-sm text-slate-500 mt-1 font-medium italic">Визуализация баланса твоих жизненных сфер.</p>
-       </div>
-
-       {/* Balance Radar */}
-       <div className="p-4 bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden">
-          <h3 className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pt-4">Колесо Баланса</h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={getRadarData()}>
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} />
-                <Radar
-                  name="Прогресс"
-                  dataKey="A"
-                  stroke="#6366f1"
-                  fill="#6366f1"
-                  fillOpacity={0.6}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
+  const renderFinanceView = () => (
+    <div className="space-y-6 animate-fade-in pb-12">
+       <div className="px-1 flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Капитал</h2>
+            <p className="text-sm text-slate-500 mt-1">Твое финансовое будущее.</p>
           </div>
+          <button 
+            onClick={() => setShowAddTx(true)}
+            className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all"
+          >
+             <i className="fa-solid fa-plus text-lg"></i>
+          </button>
        </div>
 
-       {/* Synergy Insights */}
-       {(synergyData || store.user.is_demo) && (
-         <section className="space-y-4">
-            <h3 className="text-lg font-black text-slate-800 px-1 flex items-center gap-2">
-               <i className="fa-solid fa-bolt-lightning text-amber-500"></i>
-               AI Связки (Синергия)
-            </h3>
-            <div className="space-y-3">
-               {(synergyData?.synergies || [
-                 { spheres: ['sport', 'work'], reason: 'Ваши утренние тренировки коррелируют с высокой концентрацией в рабочих блоках. Продолжайте бегать по утрам.', impactScore: 15 },
-                 { spheres: ['finance', 'growth'], reason: 'Инвестиции в обучение приносят плоды. Рост навыков напрямую отражается на ваших доходах.', impactScore: 22 }
-               ]).map((syn: any, i: number) => (
-                 <div key={i} className="p-6 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[2.5rem] text-white shadow-lg relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-150 transition-transform duration-700">
-                       <i className="fa-solid fa-circle-nodes text-6xl"></i>
-                    </div>
-                    <div className="flex gap-2 mb-2">
-                       {syn.spheres.map((s: string) => (
-                         <span key={s} className="px-3 py-1 bg-white/20 rounded-full text-[8px] font-black uppercase">{sphereLabels[s] || s}</span>
-                       ))}
-                    </div>
-                    <p className="text-sm font-medium leading-relaxed mb-4">{syn.reason}</p>
-                    <div className="flex justify-between items-center bg-black/20 p-3 rounded-2xl">
-                       <span className="text-[9px] font-bold uppercase">Влияние на баланс</span>
-                       <span className="text-sm font-black text-emerald-300">+{syn.impactScore}%</span>
-                    </div>
-                 </div>
-               ))}
-            </div>
-         </section>
+       <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto no-scrollbar">
+          {(['overview', 'operations', 'planning', 'debts', 'subs'] as const).map(tab => (
+             <button
+                key={tab}
+                onClick={() => setFinanceTab(tab)}
+                className={`flex-1 min-w-[80px] py-2 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${
+                   financeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
+                }`}
+             >
+                {tab === 'overview' ? 'Обзор' : tab === 'operations' ? 'Журнал' : tab === 'planning' ? 'Планы' : tab === 'debts' ? 'Долги' : 'Подписки'}
+             </button>
+          ))}
+       </div>
+
+       {financeTab === 'overview' && (
+          <div className="space-y-6">
+             <div className="p-8 bg-slate-900 rounded-[3rem] text-white shadow-xl space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fa-solid fa-gem text-6xl"></i></div>
+                <div>
+                   <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Чистый капитал</span>
+                   <div className="text-4xl font-black tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
+                </div>
+                
+                <div className="h-24 w-full mt-4">
+                   <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={balanceHistory}>
+                         <defs>
+                            <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
+                               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
+                               <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            </linearGradient>
+                         </defs>
+                         <Area type="monotone" dataKey="balance" stroke="#6366f1" fillOpacity={1} fill="url(#colorBal)" />
+                      </AreaChart>
+                   </ResponsiveContainer>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-2 gap-4">
+                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-2">Доходы (мес)</span>
+                   <div className="text-xl font-black text-slate-800">{financials.monthly_income.toLocaleString()}</div>
+                </div>
+                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                   <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest block mb-2">Расходы (мес)</span>
+                   <div className="text-xl font-black text-slate-800">{financials.monthly_expenses.toLocaleString()}</div>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {financeTab === 'planning' && (
+          <div className="space-y-6 animate-fade-in">
+             <div className="p-8 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] text-white shadow-xl space-y-6 relative overflow-hidden">
+                <div className="absolute -bottom-4 -right-4 p-8 opacity-20 rotate-12"><i className="fa-solid fa-infinity text-8xl"></i></div>
+                
+                <div className="space-y-1">
+                   <span className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Вечный пассивный доход</span>
+                   <h3 className="text-3xl font-black tracking-tighter">Свобода: {planningMetrics.fireCapitalToday.toLocaleString()} {financials.currency}</h3>
+                   <p className="text-[9px] font-medium text-indigo-100 leading-relaxed italic">
+                      Сумма, которая при {expectedYield}% доходности будет приносить вам {financials.monthly_income.toLocaleString()} {financials.currency} каждый месяц ВЕЧНО.
+                   </p>
+                </div>
+
+                <div className="space-y-3">
+                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                      <span>Прогресс к Свободе</span>
+                      <span>{planningMetrics.fireCoverage}%</span>
+                   </div>
+                   <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
+                      <div className="h-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-all duration-1000" style={{ width: `${planningMetrics.fireCoverage}%` }}></div>
+                   </div>
+                   <div className="flex justify-between items-center text-[9px] font-black uppercase text-indigo-100">
+                      <span>Накоплено: {netWorth.toLocaleString()}</span>
+                      <span>Нужно еще: {(Math.max(0, planningMetrics.fireCapitalToday - netWorth)).toLocaleString()}</span>
+                   </div>
+                </div>
+             </div>
+
+             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
+                <div className="space-y-6">
+                   <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ожидаемая доходность (%)</label>
+                         <span className="text-sm font-black text-indigo-600">{expectedYield}% годовых</span>
+                      </div>
+                      <input 
+                         type="range" min="1" max="30" step="1"
+                         className="w-full accent-indigo-600"
+                         value={expectedYield}
+                         onChange={e => setExpectedYield(Number(e.target.value))}
+                      />
+                      <div className="flex justify-between text-[8px] font-bold text-slate-300 uppercase">
+                         <span>Депозит (5-8%)</span>
+                         <span>Рынок (12-15%)</span>
+                         <span>Риск (20%+)</span>
+                      </div>
+                   </div>
+
+                   <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Инфляция (%)</label>
+                         <span className="text-sm font-black text-slate-900">{inflation}%</span>
+                      </div>
+                      <input 
+                         type="range" min="0" max="30" step="1"
+                         className="w-full accent-slate-900"
+                         value={inflation}
+                         onChange={e => setInflation(Number(e.target.value))}
+                      />
+                   </div>
+                </div>
+
+                <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4">
+                   <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                      <i className="fa-solid fa-hourglass-start text-indigo-500"></i> Прогноз через {planYears} {planYears < 1 ? 'мес' : 'лет'}
+                   </h4>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                         <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Нужный капитал</span>
+                         <span className="text-sm font-black text-slate-900">{planningMetrics.fireCapitalFuture.toLocaleString()} {financials.currency}</span>
+                      </div>
+                      <div>
+                         <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Пассивный доход</span>
+                         <span className="text-sm font-black text-indigo-600">{planningMetrics.passiveMonthlyFuture.toLocaleString()} {financials.currency}</span>
+                      </div>
+                   </div>
+                </div>
+
+                <div>
+                   <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-4">Выбор горизонта</label>
+                   <div className="flex gap-2 flex-wrap">
+                      {[0.5, 1, 3, 5, 10, 20].map(y => (
+                         <button 
+                            key={y}
+                            onClick={() => setPlanYears(y)}
+                            className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex-1 text-center ${planYears === y ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 text-slate-400'}`}
+                         >
+                            {y < 1 ? '6 мес' : `${y} л`}
+                         </button>
+                      ))}
+                   </div>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {financeTab === 'operations' && (
+          <div className="space-y-4 animate-fade-in">
+             <div className="flex justify-between items-center px-1">
+                <h3 className="text-lg font-black text-slate-800">История транзакций</h3>
+             </div>
+             {store.transactions.map(tx => (
+                <div key={tx.id} className="p-5 bg-white border border-slate-50 rounded-3xl shadow-sm flex justify-between items-center">
+                   <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                         <i className={`fa-solid ${catIcons[tx.category] || 'fa-receipt'}`}></i>
+                      </div>
+                      <div>
+                         <h4 className="font-black text-slate-800 text-sm">{tx.category}</h4>
+                         <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(tx.timestamp).toLocaleDateString()}</span>
+                      </div>
+                   </div>
+                   <div className={`text-sm font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                      {tx.type === 'income' ? '+' : '-'}{tx.amount.toLocaleString()} {financials.currency}
+                   </div>
+                </div>
+             ))}
+          </div>
        )}
     </div>
   );
 
-  const renderSocial = () => (
-    <div className="space-y-8 pb-12 animate-fade-in">
+  /**
+   * Renders the Social/Tribe view showing accountability partners and their reviews.
+   * Fixes the 'Cannot find name renderSocialFeedback' error.
+   */
+  const renderSocialFeedback = () => (
+    <div className="space-y-6 animate-fade-in pb-12">
        <div className="px-1">
           <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Племя</h2>
-          <p className="text-sm text-slate-500 mt-1 font-medium italic">Близкие, которые не дадут тебе сойти с пути.</p>
-       </div>
-       
-       <div className="grid grid-cols-1 gap-4">
-          {store.partners.map(p => {
-            const meta = roleMeta[p.role];
-            return (
-              <div key={p.id} className="p-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-indigo-200 transition-all">
-                 <div className={`w-14 h-14 ${meta.bg} rounded-full flex items-center justify-center text-2xl shadow-inner group-hover:scale-110 transition-transform`}>
-                    {meta.emoji}
-                 </div>
-                 <div className="flex-1">
-                    <h4 className="font-black text-slate-800 text-lg">{p.name}</h4>
-                    <span className={`role-badge ${meta.bg} ${meta.color}`}>{meta.label}</span>
-                 </div>
-                 <div className="text-right">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Проверки</div>
-                    <div className="font-black text-slate-700 text-xl">{store.reviews.filter(r => r.partner_id === p.id).length}</div>
-                 </div>
-              </div>
-            );
-          })}
+          <p className="text-sm text-slate-500 mt-1">Окружение, которое тянет тебя вверх.</p>
        </div>
 
        <section className="space-y-4">
-          <h3 className="text-lg font-black text-slate-800 px-1">Голоса племени</h3>
-          <div className="space-y-4">
-             {store.reviews.length === 0 ? (
-               <div className="p-12 text-center text-slate-400 border-2 border-dashed border-slate-100 rounded-[2rem]">
-                  Пока нет отзывов от твоего племени...
-               </div>
-             ) : store.reviews.slice().reverse().map(r => {
-               const partner = store.partners.find(p => p.id === r.partner_id);
-               const meta = partner ? roleMeta[partner.role] : null;
-               return (
-                 <div key={r.id} className="p-6 bg-white border border-slate-50 rounded-[2.5rem] shadow-sm space-y-3">
-                    <div className="flex justify-between items-center">
-                       <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-slate-800 uppercase tracking-tighter">{partner?.name}</span>
-                          {meta && <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${meta.bg} ${meta.color}`}>{meta.label}</span>}
-                       </div>
-                       <div className="flex gap-0.5">
-                          {[...Array(5)].map((_, i) => (
-                            <i key={i} className={`fa-solid fa-star text-[8px] ${i < r.rating ? 'text-amber-400' : 'text-slate-100'}`}></i>
-                          ))}
-                       </div>
-                    </div>
-                    <p className="text-sm font-medium text-slate-600 italic leading-relaxed">"{r.comment}"</p>
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                       <div className="flex items-center gap-2">
-                          <span className="text-[18px]">{r.reaction === 'fire' ? '🔥' : r.reaction === 'slow' ? '🐌' : r.reaction === 'doubt' ? '🧐' : '💪'}</span>
-                          <span className={`text-[9px] font-black uppercase ${r.is_verified ? 'text-emerald-500' : 'text-rose-500'}`}>
-                             {r.is_verified ? 'ПОДТВЕРЖДЕНО' : 'ПОД ВОПРОСОМ'}
-                          </span>
-                       </div>
-                       <span className="text-[8px] font-bold text-slate-300">{new Date(r.timestamp).toLocaleDateString()}</span>
-                    </div>
-                 </div>
-               );
-             })}
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Твои Хранители</h3>
+          <div className="grid grid-cols-2 gap-4">
+             {store.partners.map(partner => (
+                <div key={partner.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm flex flex-col items-center text-center gap-3">
+                   <div className={`w-16 h-16 rounded-full ${roleMeta[partner.role].bg} flex items-center justify-center text-3xl`}>
+                      {roleMeta[partner.role].emoji}
+                   </div>
+                   <div>
+                      <h4 className="font-black text-slate-800 text-sm">{partner.name}</h4>
+                      <span className={`text-[9px] font-black uppercase ${roleMeta[partner.role].color}`}>
+                        {roleMeta[partner.role].label}
+                      </span>
+                   </div>
+                </div>
+             ))}
           </div>
+       </section>
+
+       <section className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Последние отзывы</h3>
+             <span className="text-[9px] font-black text-indigo-600 uppercase">Всего: {store.reviews.length}</span>
+          </div>
+          
+          {store.reviews.length === 0 ? (
+             <div className="p-10 bg-slate-50 rounded-[3rem] text-center border-2 border-dashed border-slate-200">
+                <i className="fa-solid fa-comments text-slate-300 text-4xl mb-4"></i>
+                <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Пока нет отзывов от племени</p>
+             </div>
+          ) : (
+             <div className="space-y-4">
+                {store.reviews.map(review => {
+                   const partner = store.partners.find(p => p.id === review.partner_id);
+                   return (
+                      <div key={review.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm space-y-3">
+                         <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                               <div className={`w-10 h-10 rounded-full ${partner ? roleMeta[partner.role].bg : 'bg-slate-100'} flex items-center justify-center text-xl`}>
+                                  {partner ? roleMeta[partner.role].emoji : '👤'}
+                               </div>
+                               <div>
+                                  <h4 className="font-black text-slate-800 text-sm">{partner?.name || 'Аноним'}</h4>
+                                  <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(review.timestamp).toLocaleDateString()}</span>
+                               </div>
+                            </div>
+                            <div className="flex gap-1">
+                               {[1, 2, 3, 4, 5].map(star => (
+                                  <i key={star} className={`fa-solid fa-star text-[8px] ${star <= review.rating ? 'text-amber-400' : 'text-slate-100'}`}></i>
+                               ))}
+                            </div>
+                         </div>
+                         <p className="text-sm text-slate-600 font-medium leading-relaxed italic">"{review.comment}"</p>
+                         <div className="flex justify-between items-center pt-2">
+                            <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase ${review.is_verified ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                              {review.is_verified ? 'Подтверждено' : 'На проверке'}
+                            </span>
+                            <div className="text-xl">
+                              {review.reaction === 'fire' && '🔥'}
+                              {review.reaction === 'slow' && '🐌'}
+                              {review.reaction === 'doubt' && '🤔'}
+                              {review.reaction === 'strong' && '💪'}
+                            </div>
+                         </div>
+                      </div>
+                   );
+                })}
+             </div>
+          )}
        </section>
     </div>
   );
@@ -340,128 +462,62 @@ const App: React.FC = () => {
     <div className="relative">
       {store.view === AppView.LANDING ? renderLanding() : (
         <Layout activeView={store.view} setView={store.setView}>
-          {store.view === AppView.DASHBOARD && renderDashboard()}
-          {store.view === AppView.SOCIAL && renderSocial()}
-          {store.view === AppView.ANALYTICS && renderAnalytics()}
-          {store.view === AppView.VALUES && (
-             <div className="space-y-6">
-               <h2 className="text-2xl font-black text-slate-800 px-1">Ценности</h2>
-               {store.values.map(v => <ValueCard key={v.id} value={v} />)}
-               {store.values.length === 0 && (
-                 <div className="p-12 border-2 border-dashed border-slate-100 rounded-[2rem] text-center text-slate-400">
-                    Начни с определения того, что тебе важно.
-                 </div>
-               )}
-             </div>
-          )}
-          {store.view === AppView.SETTINGS && (
-            <div className="space-y-8 pb-12">
-               <div className="p-8 bg-slate-900 rounded-[3rem] text-center space-y-4">
-                  <div className="w-20 h-20 bg-indigo-500 rounded-full mx-auto flex items-center justify-center text-white text-3xl font-black">
-                     {store.user.name[0]}
+          {store.view === AppView.DASHBOARD && (
+            <div className="space-y-6 pb-12 animate-fade-in">
+               <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center text-white font-black shadow-lg">
+                      {store.user.level}
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-slate-400 uppercase tracking-tighter">Уровень {store.user.level}</div>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-black text-white">{store.user.name}</h3>
-                  <div className="flex justify-center gap-6">
-                    <div className="text-center">
-                       <div className="text-[10px] font-black text-slate-500 uppercase">Уровень</div>
-                       <div className="text-white font-black">{store.user.level}</div>
-                    </div>
-                    <div className="text-center">
-                       <div className="text-[10px] font-black text-slate-500 uppercase">Стрик</div>
-                       <div className="text-white font-black">{store.user.streak} дн.</div>
-                    </div>
+                  <div className="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100">
+                     <i className="fa-solid fa-fire text-orange-500"></i>
+                     <span className="text-sm font-black text-orange-600">{store.user.streak} ДНЕЙ</span>
                   </div>
                </div>
                
-               <div className="space-y-3">
-                  <button onClick={() => window.location.reload()} className="w-full p-5 bg-slate-50 rounded-2xl text-left font-bold text-slate-700 flex justify-between items-center">
-                     Сбросить данные и выйти
-                     <i className="fa-solid fa-arrow-right-from-bracket text-slate-300"></i>
-                  </button>
+               <div className="p-8 bg-white border border-slate-100 rounded-[3rem] shadow-sm space-y-4">
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Текущий Капитал</div>
+                    <div className="text-4xl font-black text-slate-900 tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
+                  </div>
                </div>
             </div>
           )}
+          {store.view === AppView.SOCIAL && renderSocialFeedback()}
+          {store.view === AppView.FINANCE && renderFinanceView()}
           {store.view === AppView.GOALS && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center px-1">
-                <h2 className="text-2xl font-black text-slate-800">Цели</h2>
-                <button onClick={() => setShowWizard(true)} className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-center">
-                  <i className="fa-solid fa-plus"></i>
-                </button>
-              </div>
-              <div className="space-y-4">
-                 {store.goals.map(g => (
+             <div className="space-y-6 pb-12">
+                <div className="flex justify-between items-center">
+                   <h2 className="text-2xl font-black text-slate-800">Цели</h2>
+                   <button onClick={() => setShowWizard(true)} className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center"><i className="fa-solid fa-plus"></i></button>
+                </div>
+                {store.goals.map(g => (
                    <div key={g.id} className="p-6 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm flex justify-between items-center">
                       <div>
-                        <span className="text-[9px] font-black text-slate-400 uppercase">{g.category}</span>
-                        <h3 className="text-lg font-black text-slate-800">{g.title}</h3>
+                         <span className="text-[9px] font-black text-slate-400 uppercase">{g.category}</span>
+                         <h4 className="font-black text-slate-800">{g.title}</h4>
                       </div>
-                      <div className="text-2xl font-black text-indigo-600">{Math.round((g.current_value / g.target_value) * 100)}%</div>
+                      {/* Added safety check for target_value division by zero */}
+                      <div className="text-2xl font-black text-indigo-600">{Math.round((g.current_value / (g.target_value || 1)) * 100)}%</div>
                    </div>
-                 ))}
-              </div>
+                ))}
+             </div>
+          )}
+          {store.view === AppView.SETTINGS && (
+            <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-4">
+               <div className="w-20 h-20 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-3xl font-black">{store.user.name[0]}</div>
+               <h3 className="text-xl font-black text-slate-900">{store.user.name}</h3>
+               <button onClick={() => window.location.reload()} className="text-rose-600 font-black text-[10px] uppercase">Выход</button>
             </div>
           )}
         </Layout>
       )}
 
-      {reviewingLog && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-end">
-           <div className="w-full max-w-md mx-auto bg-white rounded-t-[3rem] p-8 space-y-8 animate-slide-up">
-              <div className="flex justify-between items-center">
-                 <h3 className="text-2xl font-black text-slate-800 italic uppercase">Рецензия</h3>
-                 <button onClick={() => setReviewingLog(null)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
-              </div>
-
-              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Действие</div>
-                 <div className="text-xl font-black text-slate-900 mt-1">{reviewingLog.log.value} {reviewingLog.goal.metric}</div>
-                 <div className="text-xs text-slate-500 font-bold mt-1">по цели: {reviewingLog.goal.title}</div>
-              </div>
-
-              <div className="space-y-4">
-                 <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Кто ты из племени?</label>
-                    <select className="w-full mt-1 p-4 bg-slate-50 rounded-2xl outline-none ring-2 ring-slate-100 focus:ring-indigo-500 font-bold" onChange={e => setSelectedPartner(store.partners.find(p => p.id === e.target.value) || null)}>
-                       <option>Выбери архетип...</option>
-                       {store.partners.map(p => <option key={p.id} value={p.id}>{p.name} ({roleMeta[p.role].label})</option>)}
-                    </select>
-                 </div>
-
-                 <div className="flex justify-around bg-slate-50 p-4 rounded-3xl">
-                    {['fire', 'slow', 'doubt', 'strong'].map(r => (
-                       <button key={r} onClick={() => setReviewForm({...reviewForm, reaction: r as any})} className={`text-2xl p-2 rounded-2xl transition-all ${reviewForm.reaction === r ? 'bg-white shadow-md scale-125' : 'opacity-40 grayscale'}`}>
-                          {r === 'fire' ? '🔥' : r === 'slow' ? '🐌' : r === 'doubt' ? '🧐' : '💪'}
-                       </button>
-                    ))}
-                 </div>
-
-                 <textarea 
-                    placeholder="Напиши совет или комментарий как наставник..."
-                    className="w-full p-4 bg-slate-50 rounded-2xl outline-none ring-2 ring-slate-100 min-h-[100px] font-medium"
-                    onChange={e => setReviewForm({...reviewForm, comment: e.target.value})}
-                 ></textarea>
-
-                 <div className="flex gap-4">
-                    <button onClick={() => { 
-                      if (selectedPartner) {
-                        store.addPartnerReview({ ...reviewForm, partner_id: selectedPartner.id, log_id: reviewingLog.log.id, is_verified: true });
-                        setReviewingLog(null);
-                      }
-                    }} className="flex-1 py-5 bg-emerald-600 text-white font-black rounded-3xl shadow-lg shadow-emerald-100">ПОДТВЕРДИТЬ</button>
-                    <button onClick={() => {
-                      if (selectedPartner) {
-                        store.addPartnerReview({ ...reviewForm, partner_id: selectedPartner.id, log_id: reviewingLog.log.id, is_verified: false, rating: 2 });
-                        setReviewingLog(null);
-                      }
-                    }} className="flex-1 py-5 bg-rose-50 text-rose-600 font-black rounded-3xl">ОСПОРИТЬ</button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g, s, p) => { store.addGoal(g); setShowWizard(false); }} />}
+      {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g) => { store.addGoal(g); setShowWizard(false); }} />}
     </div>
   );
 };

@@ -9,6 +9,71 @@ export type PartnerRole =
   | 'navigator'   // Штурман (Strategy partner)
   | 'roaster';     // Критик (High accountability)
 
+export type TransactionType = 'income' | 'expense';
+
+export interface Transaction {
+  id: string;
+  amount: number;
+  type: TransactionType;
+  category: string;
+  note?: string;
+  timestamp: string;
+}
+
+export interface Action {
+  id: string;
+  title: string;
+  is_completed: boolean;
+  priority: number;
+}
+
+export interface SubGoal {
+  id: string;
+  year_goal_id: string;
+  title: string;
+  metric: string;
+  target_value: number;
+  current_value: number;
+  weight: number;
+  deadline: string;
+  estimated_days?: number;
+}
+
+export interface Project {
+  id: string;
+  subgoal_id: string;
+  owner_id: string;
+  title: string;
+  status: 'planned' | 'active' | 'completed';
+  estimated_effort_hours?: number;
+  complexity?: number;
+}
+
+export interface Debt {
+  id: string;
+  title: string;
+  total_amount: number;
+  remaining_amount: number;
+  interest_rate?: number;
+  due_date?: string;
+}
+
+export interface Subscription {
+  id: string;
+  title: string;
+  amount: number;
+  period: 'monthly' | 'yearly';
+  category: string;
+}
+
+export interface FinancialSnapshot {
+  total_assets: number;
+  total_debts: number;
+  monthly_income: number;
+  monthly_expenses: number;
+  currency: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -17,6 +82,7 @@ export interface User {
   streak: number;
   last_active: string;
   is_demo?: boolean;
+  financials?: FinancialSnapshot;
   energy_profile: {
     peak_hours: number[];
     low_energy_hours: number[];
@@ -52,9 +118,7 @@ export interface ProgressLog {
     income?: number;
     expense?: number;
     savings?: number;
-    volume?: number;
-    duration_mins?: number;
-    intensity?: number;
+    type?: 'income' | 'expense' | 'debt_payment';
   };
 }
 
@@ -73,14 +137,7 @@ export interface YearGoal {
   confidence_level: number;
   logs: ProgressLog[];
   partner_id?: string;
-}
-
-export interface DailyLog {
-  id: string;
-  date: string;
-  energy_level: number;
-  mood: number;
-  note?: string;
+  is_shared?: boolean;
 }
 
 export interface Value {
@@ -93,38 +150,6 @@ export interface Value {
 
 export type GoalStatus = "planned" | "active" | "paused" | "completed" | "abandoned";
 
-export interface SubGoal {
-  id: string;
-  year_goal_id: string;
-  title: string;
-  metric: string;
-  target_value: number;
-  current_value: number;
-  weight: number;
-  estimated_days: number;
-  deadline: string;
-}
-
-export interface Project {
-  id: string;
-  subgoal_id: string;
-  owner_id: string;
-  title: string;
-  estimated_effort_hours: number;
-  complexity: number;
-  status: "planned" | "active" | "completed";
-}
-
-export interface Action {
-  id: string;
-  project_id: string;
-  title: string;
-  type: "one_time" | "habit";
-  estimated_time_minutes: number;
-  completion_status: boolean;
-  completed_at?: string;
-}
-
 export enum AppView {
   LANDING = 'landing',
   DASHBOARD = 'dashboard',
@@ -132,5 +157,6 @@ export enum AppView {
   GOALS = 'goals',
   ANALYTICS = 'analytics',
   SETTINGS = 'settings',
-  SOCIAL = 'social'
+  SOCIAL = 'social',
+  FINANCE = 'finance'
 }
