@@ -56,13 +56,14 @@ const App: React.FC = () => {
   }, [store.transactions, netWorth]);
 
   const updateGoalProgress = (goalId: string, newValue: number) => {
+    // В реальном приложении здесь был бы вызов метода хранилища
     store.setUser(prev => ({
       ...prev,
       xp: prev.xp + 100,
       streak: prev.streak + 1
     }));
-    // In a real app, this would update the store's state properly via a dispatcher
-    // For now, we simulate the update in the local view for demo purposes
+    // Для демо-целей мы просто закрываем модалку, имитируя успех
+    setSelectedGoal(null);
   };
 
   const renderLanding = () => (
@@ -72,7 +73,7 @@ const App: React.FC = () => {
           TRIBE
         </h1>
         <p className="text-slate-500 font-medium max-w-xs mx-auto">
-          Твоя личная экосистема для достижения целей через ценности и социальное давление.
+          Твоя личная операционная система для достижения целей через ценности и поддержку окружения.
         </p>
       </div>
 
@@ -145,7 +146,7 @@ const App: React.FC = () => {
     <div className="space-y-6 animate-fade-in pb-12">
        <div className="px-1">
           <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Племя</h2>
-          <p className="text-sm text-slate-500 mt-1">Окружение, которое тянет тебя вверх.</p>
+          <p className="text-sm text-slate-500 mt-1">Твое окружение — твой рычаг роста.</p>
        </div>
 
        <section className="space-y-4">
@@ -208,11 +209,11 @@ const App: React.FC = () => {
              
              <div className="grid grid-cols-2 gap-4">
                 <div className="p-6 bg-white rounded-3xl border border-slate-100">
-                   <span className="text-[9px] font-black text-emerald-500 uppercase">Доходы</span>
+                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Доходы</span>
                    <div className="text-lg font-black text-slate-800">+{financials.monthly_income.toLocaleString()}</div>
                 </div>
                 <div className="p-6 bg-white rounded-3xl border border-slate-100">
-                   <span className="text-[9px] font-black text-rose-500 uppercase">Расходы</span>
+                   <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Расходы</span>
                    <div className="text-lg font-black text-slate-800">-{financials.monthly_expenses.toLocaleString()}</div>
                 </div>
              </div>
@@ -239,7 +240,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 bg-orange-50 px-4 py-2 rounded-2xl border border-orange-100">
                      <i className="fa-solid fa-fire text-orange-500"></i>
-                     <span className="text-sm font-black text-orange-600">{store.user.streak} ДНЕЙ</span>
+                     <span className="text-sm font-black text-orange-600 uppercase tracking-tighter">{store.user.streak} ДНЕЙ</span>
                   </div>
                </div>
                
@@ -255,7 +256,7 @@ const App: React.FC = () => {
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Главная цель</h3>
                     <div className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100">
                        <span className="text-[9px] font-black text-indigo-200 uppercase">{store.goals[0].category}</span>
-                       <h4 className="font-black text-xl mb-2">{store.goals[0].title}</h4>
+                       <h4 className="font-black text-xl mb-2 leading-tight">{store.goals[0].title}</h4>
                        <div className="flex justify-between text-xs font-black opacity-80 mb-2">
                           <span>{Math.round((store.goals[0].current_value / store.goals[0].target_value) * 100)}%</span>
                           <span>{store.goals[0].current_value} / {store.goals[0].target_value} {store.goals[0].metric}</span>
@@ -272,20 +273,27 @@ const App: React.FC = () => {
           {store.view === AppView.FINANCE && renderFinanceView()}
           {store.view === AppView.GOALS && renderGoals()}
           {store.view === AppView.SETTINGS && (
-            <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-4 animate-fade-in">
-               <div className="w-20 h-20 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-3xl font-black uppercase">{store.user.name[0]}</div>
-               <h3 className="text-xl font-black text-slate-900">{store.user.name}</h3>
-               <div className="grid grid-cols-2 gap-3 pt-4">
-                  <div className="p-4 bg-white rounded-3xl border border-slate-100">
-                     <div className="text-xs font-black text-slate-400 uppercase mb-1">XP</div>
-                     <div className="text-lg font-black text-indigo-600">{store.user.xp}</div>
+            <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-6 animate-fade-in">
+               <div className="w-24 h-24 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-4xl font-black uppercase shadow-xl shadow-indigo-100">
+                 {store.user.name[0]}
+               </div>
+               <div>
+                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">{store.user.name}</h3>
+                 <p className="text-sm text-slate-400 font-medium">Амбассадор Племени</p>
+               </div>
+               <div className="grid grid-cols-2 gap-3">
+                  <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                     <div className="text-xs font-black text-slate-400 uppercase mb-1">Опыт (XP)</div>
+                     <div className="text-xl font-black text-indigo-600">{store.user.xp}</div>
                   </div>
-                  <div className="p-4 bg-white rounded-3xl border border-slate-100">
+                  <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
                      <div className="text-xs font-black text-slate-400 uppercase mb-1">Стрик</div>
-                     <div className="text-lg font-black text-orange-500">{store.user.streak}</div>
+                     <div className="text-xl font-black text-orange-500">{store.user.streak}</div>
                   </div>
                </div>
-               <button onClick={() => window.location.reload()} className="w-full mt-6 py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl">Выйти из аккаунта</button>
+               <button onClick={() => window.location.reload()} className="w-full py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl active:bg-rose-50 transition-colors">
+                 Выйти из аккаунта
+               </button>
             </div>
           )}
         </Layout>
@@ -312,21 +320,21 @@ const App: React.FC = () => {
               <div className="w-10"></div>
            </header>
            
-           <div className="flex-1 overflow-y-auto p-6 space-y-8">
+           <div className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar pb-32">
               <div className="space-y-2">
                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{selectedGoal.category}</span>
-                 <h2 className="text-3xl font-black text-slate-800 tracking-tighter">{selectedGoal.title}</h2>
+                 <h2 className="text-3xl font-black text-slate-800 tracking-tighter leading-tight">{selectedGoal.title}</h2>
               </div>
 
-              <div className="p-6 bg-slate-900 rounded-[2.5rem] text-white space-y-4">
+              <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white space-y-6 shadow-2xl">
                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-indigo-300 uppercase">Прогресс</span>
-                    <span className="text-2xl font-black">{Math.round((selectedGoal.current_value / selectedGoal.target_value) * 100)}%</span>
+                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Прогресс года</span>
+                    <span className="text-3xl font-black tracking-tighter">{Math.round((selectedGoal.current_value / selectedGoal.target_value) * 100)}%</span>
                  </div>
-                 <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500" style={{ width: `${(selectedGoal.current_value / selectedGoal.target_value) * 100}%` }}></div>
+                 <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${(selectedGoal.current_value / selectedGoal.target_value) * 100}%` }}></div>
                  </div>
-                 <div className="text-center text-xs font-medium text-slate-400">
+                 <div className="text-center text-xs font-bold text-slate-400 uppercase tracking-tighter">
                     {selectedGoal.current_value.toLocaleString()} / {selectedGoal.target_value.toLocaleString()} {selectedGoal.metric}
                  </div>
               </div>
@@ -334,33 +342,34 @@ const App: React.FC = () => {
               <section className="space-y-4">
                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Этапы (Subgoals)</h3>
                  <div className="space-y-3">
-                    {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map((sg, i) => (
-                       <div key={sg.id} className="p-5 bg-white border border-slate-100 rounded-3xl flex justify-between items-center shadow-sm">
-                          <div className="flex items-center gap-4">
-                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
-                                {i + 1}
-                             </div>
-                             <div>
-                                <div className="text-sm font-black text-slate-800">{sg.title}</div>
-                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вес: {sg.weight}%</div>
-                             </div>
-                          </div>
-                          <i className="fa-solid fa-circle-check text-slate-100 text-xl"></i>
-                       </div>
-                    ))}
+                    {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).length > 0 ? (
+                      store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map((sg, i) => (
+                        <div key={sg.id} className="p-5 bg-white border border-slate-100 rounded-3xl flex justify-between items-center shadow-sm">
+                            <div className="flex items-center gap-4">
+                              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
+                                  {i + 1}
+                              </div>
+                              <div>
+                                  <div className="text-sm font-black text-slate-800 leading-tight">{sg.title}</div>
+                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вес этапа: {sg.weight}%</div>
+                              </div>
+                            </div>
+                            <i className="fa-solid fa-circle-check text-slate-100 text-xl"></i>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 italic text-center py-4">План декомпозиции в процессе формирования...</p>
+                    )}
                  </div>
               </section>
            </div>
 
-           <footer className="p-6 border-t bg-white">
+           <footer className="p-6 border-t bg-white sticky bottom-0">
               <button 
-                onClick={() => {
-                  updateGoalProgress(selectedGoal.id, selectedGoal.current_value + 1);
-                  setSelectedGoal(null);
-                }}
-                className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all"
+                onClick={() => updateGoalProgress(selectedGoal.id, selectedGoal.current_value + 1)}
+                className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase tracking-widest text-sm"
               >
-                 ОТМЕТИТЬ ПРОГРЕСС (+1)
+                 ОТМЕТИТЬ ПРОГРЕСС
               </button>
            </footer>
         </div>
