@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // Безопасное сопоставление ключа API
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY_tribe || process.env.API_KEY || "")
   },
   build: {
