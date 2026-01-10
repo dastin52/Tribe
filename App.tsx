@@ -62,13 +62,9 @@ const App: React.FC = () => {
       streak: prev.streak + 1
     }));
     
-    // Временная имитация обновления прогресса в UI
-    if (selectedGoal) {
-      const updatedValue = Math.min(selectedGoal.target_value, selectedGoal.current_value + (selectedGoal.target_value * 0.05));
-      // В полноценном приложении здесь был бы store.updateGoal
-      setSelectedGoal(null);
-      alert('Прогресс успешно зафиксирован! Вы получили +150 XP');
-    }
+    // В полноценном приложении здесь был бы вызов метода обновления прогресса в сторе
+    setSelectedGoal(null);
+    alert('Прогресс зафиксирован! +150 XP');
   };
 
   const renderLanding = () => (
@@ -84,16 +80,16 @@ const App: React.FC = () => {
 
       <div className="w-full max-w-xs space-y-4">
         <button 
-          onClick={() => store.startDemo()}
+          onClick={() => store.startFresh()}
           className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-3"
         >
-          ПОПРОБОВАТЬ ДЕМО
+          НАЧАТЬ
         </button>
         <button 
-          onClick={() => store.startFresh()}
+          onClick={() => store.startDemo()}
           className="w-full py-5 bg-white text-indigo-600 border-2 border-indigo-50 font-black rounded-[2rem] active:scale-95 transition-all"
         >
-          НАЧАТЬ С НУЛЯ
+          ДЕМО-РЕЖИМ
         </button>
       </div>
     </div>
@@ -138,7 +134,7 @@ const App: React.FC = () => {
               
               <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase">
                 <span>{g.current_value.toLocaleString()} / {g.target_value.toLocaleString()} {g.metric}</span>
-                <span>Доверие: {g.confidence_level}%</span>
+                <span>Уверенность: {g.confidence_level}%</span>
               </div>
             </div>
           ))}
@@ -259,7 +255,10 @@ const App: React.FC = () => {
                {store.goals.length > 0 && (
                  <div className="space-y-4">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Главная цель</h3>
-                    <div className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100">
+                    <div 
+                      onClick={() => setSelectedGoal(store.goals[0])}
+                      className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 cursor-pointer active:scale-[0.98] transition-all"
+                    >
                        <span className="text-[9px] font-black text-indigo-200 uppercase">{store.goals[0].category}</span>
                        <h4 className="font-black text-xl mb-2 leading-tight">{store.goals[0].title}</h4>
                        <div className="flex justify-between text-xs font-black opacity-80 mb-2">
@@ -297,7 +296,7 @@ const App: React.FC = () => {
                   </div>
                </div>
                <button onClick={() => window.location.reload()} className="w-full py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl active:bg-rose-50 transition-colors">
-                 Выйти из аккаунта
+                 Сбросить сессию
                </button>
             </div>
           )}
@@ -321,7 +320,7 @@ const App: React.FC = () => {
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                  <i className="fa-solid fa-chevron-left"></i>
               </button>
-              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Просмотр цели</h3>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Цель</h3>
               <div className="w-10"></div>
            </header>
            
@@ -345,7 +344,7 @@ const App: React.FC = () => {
               </div>
 
               <section className="space-y-4">
-                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">План декомпозиции</h3>
+                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Этапы реализации</h3>
                  <div className="space-y-3">
                     {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).length > 0 ? (
                       store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map((sg, i) => (
@@ -356,7 +355,7 @@ const App: React.FC = () => {
                               </div>
                               <div>
                                   <div className="text-sm font-black text-slate-800 leading-tight">{sg.title}</div>
-                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вклад в цель: {sg.weight}%</div>
+                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вклад: {sg.weight}%</div>
                               </div>
                             </div>
                             <i className="fa-solid fa-circle-check text-slate-200 text-xl"></i>
@@ -364,7 +363,7 @@ const App: React.FC = () => {
                       ))
                     ) : (
                       <div className="p-10 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <p className="text-xs text-slate-400 font-bold italic">План формируется автоматически при создании цели...</p>
+                        <p className="text-xs text-slate-400 font-bold italic">План формируется автоматически при создании...</p>
                       </div>
                     )}
                  </div>
@@ -376,7 +375,7 @@ const App: React.FC = () => {
                 onClick={() => handleUpdateProgress(selectedGoal.id)}
                 className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase tracking-widest text-sm"
               >
-                 ОТМЕТИТЬ ПРОГРЕСС
+                 ЗАФИКСИРОВАТЬ ПРОГРЕСС
               </button>
            </footer>
         </div>
