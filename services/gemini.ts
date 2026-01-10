@@ -1,11 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Ключ будет подставлен Vite во время сборки
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Инициализация с проверкой наличия ключа
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("API Key is missing. Check your Cloudflare environment variables.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || "dummy-key" });
+};
 
 export const geminiService = {
   async validateGoal(value: string, goalTitle: string, goalMetric: string) {
     try {
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Проверь цель на соответствие ценности "${value}". Цель: "${goalTitle}", Метрика: "${goalMetric}". Оцени реалистичность и дай краткий совет. Ответь в формате JSON: { "isValid": boolean, "feedback": string, "suggestedDeadlineMonths": number }`,
@@ -25,14 +32,15 @@ export const geminiService = {
       return JSON.parse(response.text || '{}');
     } catch (error) {
       console.error("Gemini API Error:", error);
-      return { isValid: true, feedback: "Цель принята (режим оффлайн проверки)", suggestedDeadlineMonths: 12 };
+      return { isValid: true, feedback: "Проверка временно недоступна, но цель выглядит достойно!", suggestedDeadlineMonths: 12 };
     }
   },
 
   async decomposeGoal(goalTitle: string, metric: string, target: number, category: string) {
     try {
+      const ai = getAiClient();
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: `Разложи цель "${goalTitle}" (${category}, ${metric}: ${target}) на шаги. Для каждого шага укажи реалистичную длительность в днях. Верни JSON структуру с subGoals и projects.`,
         config: {
           responseMimeType: "application/json",
@@ -75,9 +83,9 @@ export const geminiService = {
     } catch (error) {
       console.error("Gemini API Error:", error);
       return {
-        subGoals: [{ title: "Начать действовать", metric: metric, target_value: target, weight: 100, estimated_days: 30 }],
-        projects: [{ title: "Первый шаг", estimated_effort_hours: 10, complexity: 1 }],
-        suggestedHabits: ["Ежедневный фокус"]
+        subGoals: [{ title: "Сделать первый шаг", metric: metric, target_value: target, weight: 100, estimated_days: 30 }],
+        projects: [{ title: "Подготовительный этап", estimated_effort_hours: 5, complexity: 1 }],
+        suggestedHabits: ["Ежедневный прогресс"]
       };
     }
   }
