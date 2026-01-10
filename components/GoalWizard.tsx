@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Value, YearGoal, SubGoal, Project, GoalCategory } from '../types';
+import { Value, YearGoal, SubGoal, Project, GoalCategory, GoalStatus } from '../types';
 import { geminiService } from '../services/gemini';
 
 interface GoalWizardProps {
@@ -21,7 +20,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
     category: 'growth',
     target_value: 0,
     value_id: values[0]?.id || '',
-    status: 'planned',
+    status: 'planned' as GoalStatus,
     confidence_level: 50
   });
 
@@ -53,7 +52,6 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
           return;
         }
         
-        // Calculate suggested deadline
         const date = new Date();
         date.setMonth(date.getMonth() + result.suggestedDeadlineMonths);
         setSuggestedDeadline(date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
@@ -81,18 +79,23 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
 
   const handleFinish = () => {
     const goalId = crypto.randomUUID();
-    // Fix: Remove non-existent properties 'owner_type', 'owner_id', 'priority', 'success_criteria' from YearGoal object literal
     const finalGoal: YearGoal = {
-      ...(goalData as YearGoal),
       id: goalId,
+      category: goalData.category as GoalCategory || 'growth',
+      value_id: goalData.value_id || '',
+      title: goalData.title || '',
+      description: goalData.description || '',
+      metric: goalData.metric || '',
+      target_value: goalData.target_value || 0,
+      current_value: 0,
       start_date: new Date().toISOString(),
       end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-      current_value: 0,
-      status: 'active',
+      status: 'active' as GoalStatus,
+      confidence_level: goalData.confidence_level || 50,
       logs: []
     };
 
-    const finalSubGoals: SubGoal[] = decomposition.subGoals.map((s: any) => ({
+    const finalSubGoals: SubGoal[] = (decomposition?.subGoals || []).map((s: any) => ({
       ...s,
       id: crypto.randomUUID(),
       year_goal_id: goalId,
@@ -100,10 +103,10 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
       deadline: new Date(new Date().setDate(new Date().getDate() + (s.estimated_days || 30))).toISOString()
     }));
 
-    const finalProjects: Project[] = decomposition.projects.map((p: any) => ({
+    const finalProjects: Project[] = (decomposition?.projects || []).map((p: any) => ({
       ...p,
       id: crypto.randomUUID(),
-      subgoal_id: finalSubGoals[0].id,
+      subgoal_id: finalSubGoals[0]?.id || '',
       owner_id: 'user-1',
       status: 'planned'
     }));
@@ -147,7 +150,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
                   value={goalData.value_id}
                   onChange={e => setGoalData({...goalData, value_id: e.target.value})}
                 >
-                  {values.map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
+                  {values.length > 0 ? values.map(v => <option key={v.id} value={v.id}>{v.title}</option>) : <option value="">Сначала добавьте ценность</option>}
                 </select>
               </div>
               
