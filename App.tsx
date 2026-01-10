@@ -63,7 +63,7 @@ const App: React.FC = () => {
     }));
     
     setSelectedGoal(null);
-    alert('Прогресс зафиксирован! Вы получили +150 XP');
+    alert('Прогресс зафиксирован! +150 XP');
   };
 
   const renderLanding = () => (
@@ -253,7 +253,7 @@ const App: React.FC = () => {
 
                {store.goals.length > 0 && (
                  <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Актуальная цель</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Главная цель</h3>
                     <div 
                       onClick={() => setSelectedGoal(store.goals[0])}
                       className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 cursor-pointer active:scale-[0.98] transition-all"
@@ -261,11 +261,11 @@ const App: React.FC = () => {
                        <span className="text-[9px] font-black text-indigo-200 uppercase">{store.goals[0].category}</span>
                        <h4 className="font-black text-xl mb-2 leading-tight">{store.goals[0].title}</h4>
                        <div className="flex justify-between text-xs font-black opacity-80 mb-2">
-                          <span>{Math.round((store.goals[0].current_value / store.goals[0].target_value) * 100)}%</span>
+                          <span>{Math.round((store.goals[0].current_value / (store.goals[0].target_value || 1)) * 100)}%</span>
                           <span>{store.goals[0].current_value} / {store.goals[0].target_value} {store.goals[0].metric}</span>
                        </div>
                        <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                          <div className="h-full bg-white" style={{ width: `${(store.goals[0].current_value / store.goals[0].target_value) * 100}%` }}></div>
+                          <div className="h-full bg-white" style={{ width: `${(store.goals[0].current_value / (store.goals[0].target_value || 1)) * 100}%` }}></div>
                        </div>
                     </div>
                  </div>
@@ -295,7 +295,7 @@ const App: React.FC = () => {
                   </div>
                </div>
                <button onClick={() => window.location.reload()} className="w-full py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl active:bg-rose-50 transition-colors">
-                 Сбросить и выйти
+                 Сбросить сессию
                </button>
             </div>
           )}
@@ -319,7 +319,7 @@ const App: React.FC = () => {
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                  <i className="fa-solid fa-chevron-left"></i>
               </button>
-              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Детали</h3>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Просмотр</h3>
               <div className="w-10"></div>
            </header>
            
@@ -362,7 +362,7 @@ const App: React.FC = () => {
                       ))
                     ) : (
                       <div className="p-10 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <p className="text-xs text-slate-400 font-bold italic">Для этой цели еще не сформирован детальный план...</p>
+                        <p className="text-xs text-slate-400 font-bold italic">План формируется автоматически при создании цели...</p>
                       </div>
                     )}
                  </div>
