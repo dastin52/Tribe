@@ -61,7 +61,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
         setAiFeedback(result.feedback || 'Цель выглядит амбициозной и реалистичной.');
         setStep(2);
       } catch (e) {
-        setStep(2); // Fallback if API fails
+        setStep(2); 
         setAiFeedback('Не удалось подключиться к AI для проверки, но мы можем продолжить.');
       } finally {
         setLoading(false);
