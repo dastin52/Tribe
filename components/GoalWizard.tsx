@@ -20,7 +20,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
     category: 'growth',
     target_value: 0,
     value_id: values[0]?.id || '',
-    status: 'planned' as GoalStatus,
+    status: 'active' as GoalStatus,
     confidence_level: 50
   });
 
