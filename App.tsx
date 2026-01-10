@@ -1,11 +1,10 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from './store/useStore';
-import { AppView, GoalCategory, YearGoal, AccountabilityPartner, ProgressLog, PartnerRole, Transaction, TransactionType } from './types';
+import { AppView, YearGoal, AccountabilityPartner, ProgressLog, PartnerRole, Transaction } from './types';
 import { Layout } from './components/Layout';
 import { GoalWizard } from './components/GoalWizard';
 import { 
-  ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
+  ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 
 // Extend window for Telegram
@@ -26,11 +25,6 @@ const roleMeta: Record<PartnerRole, { label: string, emoji: string, color: strin
   roaster: { label: 'Критик', emoji: '🔥', color: 'text-orange-600', bg: 'bg-orange-50' },
 };
 
-const categories = {
-  income: ['Зарплата', 'Инвестиции', 'Подарок', 'Прочее'],
-  expense: ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Образование', 'Прочее']
-};
-
 const catIcons: Record<string, string> = {
   'Зарплата': 'fa-money-bill-wave',
   'Инвестиции': 'fa-chart-line',
@@ -45,49 +39,25 @@ const catIcons: Record<string, string> = {
 const App: React.FC = () => {
   const store = useStore();
   const [showWizard, setShowWizard] = useState(false);
-  const [reviewingLog, setReviewingLog] = useState<{goal: YearGoal, log: ProgressLog} | null>(null);
-  const [selectedPartner, setSelectedPartner] = useState<AccountabilityPartner | null>(null);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '', reaction: 'fire' as any });
   const [financeTab, setFinanceTab] = useState<'overview' | 'operations' | 'planning' | 'debts' | 'subs'>('overview');
-  const [showAddTx, setShowAddTx] = useState(false);
   
+  // Planning state
+  const [planYears, setPlanYears] = useState(1);
+  const [inflation, setInflation] = useState(10);
+  const [growth, setGrowth] = useState(15);
+  const [expectedYield, setExpectedYield] = useState(12);
+
   // Telegram Integration
   useEffect(() => {
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
-      tg.expand(); // Expand to full height in Telegram
-      
-      // Sync theme colors with Telegram if needed
-      document.body.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
+      tg.expand();
     }
   }, []);
 
-  // Planning state
-  const [planYears, setPlanYears] = useState(1);
-  const [inflation, setInflation] = useState(10);
-  const [growth, setGrowth] = useState(15);
-  const [expectedYield, setExpectedYield] = useState(12); // Ожидаемая доходность капитала %
-
-  const [newTx, setNewTx] = useState<Omit<Transaction, 'id' | 'timestamp'>>({
-    amount: 0,
-    type: 'expense',
-    category: categories.expense[0],
-    note: ''
-  });
-
   const financials = store.user.financials || { total_assets: 0, total_debts: 0, monthly_income: 0, monthly_expenses: 0, currency: '₽' };
   const netWorth = financials.total_assets - financials.total_debts;
-
-  const categoryData = useMemo(() => {
-    const expenses = store.transactions.filter(t => t.type === 'expense');
-    const grouped = expenses.reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    return Object.entries(grouped).map(([name, value]) => ({ name, value }));
-  }, [store.transactions]);
 
   const balanceHistory = useMemo(() => {
     const sorted = [...store.transactions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -101,50 +71,27 @@ const App: React.FC = () => {
     }).slice(-10);
   }, [store.transactions, netWorth]);
 
-  // Comprehensive Financial Planning Logic
   const planningMetrics = useMemo(() => {
     const monthlyExp = financials.monthly_expenses || 1;
     const monthlyInc = financials.monthly_income || 1;
-    
     const i = inflation / 100;
-    const g = growth / 100;
     const yRate = expectedYield / 100;
     const n = planYears;
     
-    const calculateTotal = (baseMonthly: number, rate: number, years: number) => {
-      if (years === 0.5) return baseMonthly * 6;
-      let total = 0;
-      let currentYearAmount = baseMonthly * 12;
-      for (let y = 0; y < Math.floor(years); y++) {
-        total += currentYearAmount * Math.pow(1 + rate, y);
-      }
-      const remaining = years - Math.floor(years);
-      if (remaining > 0) {
-        total += (baseMonthly * 12 * remaining) * Math.pow(1 + rate, Math.floor(years));
-      }
-      return total;
-    };
-
-    const neededForSurvival = calculateTotal(monthlyExp, i, n);
-    const neededForLifestylePeriod = calculateTotal(monthlyInc, g, n);
-
     const fireCapitalToday = (monthlyInc * 12) / (yRate || 0.01);
     const fireCapitalFuture = fireCapitalToday * Math.pow(1 + i, n);
     const passiveMonthlyFuture = (fireCapitalFuture * yRate) / 12;
 
     return { 
-      neededForSurvival: Math.round(neededForSurvival),
-      neededForLifestylePeriod: Math.round(neededForLifestylePeriod),
       fireCapitalToday: Math.round(fireCapitalToday),
       fireCapitalFuture: Math.round(fireCapitalFuture),
       passiveMonthlyFuture: Math.round(passiveMonthlyFuture),
-      survivalCoverage: Math.min(100, Math.round((netWorth / (neededForSurvival || 1)) * 100)),
       fireCoverage: Math.min(100, Math.round((netWorth / (fireCapitalToday || 1)) * 100))
     };
-  }, [financials, planYears, inflation, growth, expectedYield, netWorth]);
+  }, [financials, planYears, inflation, expectedYield, netWorth]);
 
   const renderLanding = () => (
-    <div className="min-h-screen bg-[#fcfdfe] flex flex-col items-center justify-center p-8 text-center space-y-12">
+    <div className="min-h-screen bg-[#fcfdfe] flex flex-col items-center justify-center p-8 text-center space-y-12 animate-fade-in">
       <div className="space-y-4">
         <h1 className="text-6xl font-black bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tighter">
           TRIBE
@@ -186,198 +133,6 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderFinanceView = () => (
-    <div className="space-y-6 animate-fade-in pb-12">
-       <div className="px-1 flex justify-between items-center">
-          <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Капитал</h2>
-            <p className="text-sm text-slate-500 mt-1">Твое финансовое будущее.</p>
-          </div>
-          <button 
-            onClick={() => setShowAddTx(true)}
-            className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all"
-          >
-             <i className="fa-solid fa-plus text-lg"></i>
-          </button>
-       </div>
-
-       <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto no-scrollbar">
-          {(['overview', 'operations', 'planning', 'debts', 'subs'] as const).map(tab => (
-             <button
-                key={tab}
-                onClick={() => setFinanceTab(tab)}
-                className={`flex-1 min-w-[80px] py-2 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${
-                   financeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
-                }`}
-             >
-                {tab === 'overview' ? 'Обзор' : tab === 'operations' ? 'Журнал' : tab === 'planning' ? 'Планы' : tab === 'debts' ? 'Долги' : 'Подписки'}
-             </button>
-          ))}
-       </div>
-
-       {financeTab === 'overview' && (
-          <div className="space-y-6">
-             <div className="p-8 bg-slate-900 rounded-[3rem] text-white shadow-xl space-y-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-5"><i className="fa-solid fa-gem text-6xl"></i></div>
-                <div>
-                   <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Чистый капитал</span>
-                   <div className="text-4xl font-black tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
-                </div>
-                
-                <div className="h-24 w-full mt-4">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={balanceHistory}>
-                         <defs>
-                            <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
-                               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
-                               <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                            </linearGradient>
-                         </defs>
-                         <Area type="monotone" dataKey="balance" stroke="#6366f1" fillOpacity={1} fill="url(#colorBal)" />
-                      </AreaChart>
-                   </ResponsiveContainer>
-                </div>
-             </div>
-
-             <div className="grid grid-cols-2 gap-4">
-                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
-                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-2">Доходы (мес)</span>
-                   <div className="text-xl font-black text-slate-800">{financials.monthly_income.toLocaleString()}</div>
-                </div>
-                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
-                   <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest block mb-2">Расходы (мес)</span>
-                   <div className="text-xl font-black text-slate-800">{financials.monthly_expenses.toLocaleString()}</div>
-                </div>
-             </div>
-          </div>
-       )}
-
-       {financeTab === 'planning' && (
-          <div className="space-y-6 animate-fade-in">
-             <div className="p-8 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] text-white shadow-xl space-y-6 relative overflow-hidden">
-                <div className="absolute -bottom-4 -right-4 p-8 opacity-20 rotate-12"><i className="fa-solid fa-infinity text-8xl"></i></div>
-                
-                <div className="space-y-1">
-                   <span className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Вечный пассивный доход</span>
-                   <h3 className="text-3xl font-black tracking-tighter">Свобода: {planningMetrics.fireCapitalToday.toLocaleString()} {financials.currency}</h3>
-                   <p className="text-[9px] font-medium text-indigo-100 leading-relaxed italic">
-                      Сумма, которая при {expectedYield}% доходности будет приносить вам {financials.monthly_income.toLocaleString()} {financials.currency} каждый месяц ВЕЧНО.
-                   </p>
-                </div>
-
-                <div className="space-y-3">
-                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                      <span>Прогресс к Свободе</span>
-                      <span>{planningMetrics.fireCoverage}%</span>
-                   </div>
-                   <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
-                      <div className="h-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-all duration-1000" style={{ width: `${planningMetrics.fireCoverage}%` }}></div>
-                   </div>
-                   <div className="flex justify-between items-center text-[9px] font-black uppercase text-indigo-100">
-                      <span>Накоплено: {netWorth.toLocaleString()}</span>
-                      <span>Нужно еще: {(Math.max(0, planningMetrics.fireCapitalToday - netWorth)).toLocaleString()}</span>
-                   </div>
-                </div>
-             </div>
-
-             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
-                <div className="space-y-6">
-                   <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ожидаемая доходность (%)</label>
-                         <span className="text-sm font-black text-indigo-600">{expectedYield}% годовых</span>
-                      </div>
-                      <input 
-                         type="range" min="1" max="30" step="1"
-                         className="w-full accent-indigo-600"
-                         value={expectedYield}
-                         onChange={e => setExpectedYield(Number(e.target.value))}
-                      />
-                      <div className="flex justify-between text-[8px] font-bold text-slate-300 uppercase">
-                         <span>Депозит (5-8%)</span>
-                         <span>Рынок (12-15%)</span>
-                         <span>Риск (20%+)</span>
-                      </div>
-                   </div>
-
-                   <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Инфляция (%)</label>
-                         <span className="text-sm font-black text-slate-900">{inflation}%</span>
-                      </div>
-                      <input 
-                         type="range" min="0" max="30" step="1"
-                         className="w-full accent-slate-900"
-                         value={inflation}
-                         onChange={e => setInflation(Number(e.target.value))}
-                      />
-                   </div>
-                </div>
-
-                <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4">
-                   <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                      <i className="fa-solid fa-hourglass-start text-indigo-500"></i> Прогноз через {planYears} {planYears < 1 ? 'мес' : 'лет'}
-                   </h4>
-                   <div className="grid grid-cols-2 gap-4">
-                      <div>
-                         <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Нужный капитал</span>
-                         <span className="text-sm font-black text-slate-900">{planningMetrics.fireCapitalFuture.toLocaleString()} {financials.currency}</span>
-                      </div>
-                      <div>
-                         <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Пассивный доход</span>
-                         <span className="text-sm font-black text-indigo-600">{planningMetrics.passiveMonthlyFuture.toLocaleString()} {financials.currency}</span>
-                      </div>
-                   </div>
-                </div>
-
-                <div>
-                   <label className="text-xs font-black text-slate-800 uppercase tracking-wider block mb-4">Выбор горизонта</label>
-                   <div className="flex gap-2 flex-wrap">
-                      {[0.5, 1, 3, 5, 10, 20].map(y => (
-                         <button 
-                            key={y}
-                            onClick={() => setPlanYears(y)}
-                            className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all flex-1 text-center ${planYears === y ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 text-slate-400'}`}
-                         >
-                            {y < 1 ? '6 мес' : `${y} л`}
-                         </button>
-                      ))}
-                   </div>
-                </div>
-             </div>
-          </div>
-       )}
-
-       {financeTab === 'operations' && (
-          <div className="space-y-4 animate-fade-in">
-             <div className="flex justify-between items-center px-1">
-                <h3 className="text-lg font-black text-slate-800">История транзакций</h3>
-             </div>
-             {store.transactions.map(tx => (
-                <div key={tx.id} className="p-5 bg-white border border-slate-50 rounded-3xl shadow-sm flex justify-between items-center">
-                   <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                         <i className={`fa-solid ${catIcons[tx.category] || 'fa-receipt'}`}></i>
-                      </div>
-                      <div>
-                         <h4 className="font-black text-slate-800 text-sm">{tx.category}</h4>
-                         <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(tx.timestamp).toLocaleDateString()}</span>
-                      </div>
-                   </div>
-                   <div className={`text-sm font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                      {tx.type === 'income' ? '+' : '-'}{tx.amount.toLocaleString()} {financials.currency}
-                   </div>
-                </div>
-             ))}
-          </div>
-       )}
-    </div>
-  );
-
-  /**
-   * Renders the Social/Tribe view showing accountability partners and their reviews.
-   * Fixes the 'Cannot find name renderSocialFeedback' error.
-   */
   const renderSocialFeedback = () => (
     <div className="space-y-6 animate-fade-in pb-12">
        <div className="px-1">
@@ -407,13 +162,12 @@ const App: React.FC = () => {
        <section className="space-y-4">
           <div className="flex justify-between items-center px-1">
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Последние отзывы</h3>
-             <span className="text-[9px] font-black text-indigo-600 uppercase">Всего: {store.reviews.length}</span>
           </div>
           
           {store.reviews.length === 0 ? (
              <div className="p-10 bg-slate-50 rounded-[3rem] text-center border-2 border-dashed border-slate-200">
                 <i className="fa-solid fa-comments text-slate-300 text-4xl mb-4"></i>
-                <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Пока нет отзывов от племени</p>
+                <p className="text-sm text-slate-400 font-bold uppercase tracking-tight">Пока нет отзывов</p>
              </div>
           ) : (
              <div className="space-y-4">
@@ -431,24 +185,12 @@ const App: React.FC = () => {
                                   <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(review.timestamp).toLocaleDateString()}</span>
                                </div>
                             </div>
-                            <div className="flex gap-1">
-                               {[1, 2, 3, 4, 5].map(star => (
-                                  <i key={star} className={`fa-solid fa-star text-[8px] ${star <= review.rating ? 'text-amber-400' : 'text-slate-100'}`}></i>
-                               ))}
-                            </div>
-                         </div>
-                         <p className="text-sm text-slate-600 font-medium leading-relaxed italic">"{review.comment}"</p>
-                         <div className="flex justify-between items-center pt-2">
-                            <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase ${review.is_verified ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                              {review.is_verified ? 'Подтверждено' : 'На проверке'}
-                            </span>
                             <div className="text-xl">
                               {review.reaction === 'fire' && '🔥'}
-                              {review.reaction === 'slow' && '🐌'}
-                              {review.reaction === 'doubt' && '🤔'}
                               {review.reaction === 'strong' && '💪'}
                             </div>
                          </div>
+                         <p className="text-sm text-slate-600 font-medium leading-relaxed italic">"{review.comment}"</p>
                       </div>
                    );
                 })}
@@ -458,8 +200,134 @@ const App: React.FC = () => {
     </div>
   );
 
+  const renderFinanceView = () => (
+    <div className="space-y-6 animate-fade-in pb-12">
+       <div className="px-1 flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Капитал</h2>
+            <p className="text-sm text-slate-500 mt-1">Твое финансовое будущее.</p>
+          </div>
+       </div>
+
+       <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto no-scrollbar">
+          {(['overview', 'operations', 'planning', 'debts', 'subs'] as const).map(tab => (
+             <button
+                key={tab}
+                onClick={() => setFinanceTab(tab)}
+                className={`flex-1 min-w-[80px] py-2 text-[10px] font-black uppercase tracking-tighter rounded-xl transition-all ${
+                   financeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
+                }`}
+             >
+                {tab === 'overview' ? 'Обзор' : tab === 'operations' ? 'Журнал' : tab === 'planning' ? 'Планы' : tab === 'debts' ? 'Долги' : 'Подписки'}
+             </button>
+          ))}
+       </div>
+
+       {financeTab === 'overview' && (
+          <div className="space-y-6">
+             <div className="p-8 bg-slate-900 rounded-[3rem] text-white shadow-xl space-y-4 relative overflow-hidden">
+                <div>
+                   <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Чистый капитал</span>
+                   <div className="text-4xl font-black tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
+                </div>
+                
+                <div className="h-24 w-full mt-4">
+                   <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={balanceHistory}>
+                         <Area type="monotone" dataKey="balance" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} />
+                      </AreaChart>
+                   </ResponsiveContainer>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-2 gap-4">
+                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-2">Доходы</span>
+                   <div className="text-xl font-black text-slate-800">{financials.monthly_income.toLocaleString()}</div>
+                </div>
+                <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                   <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest block mb-2">Расходы</span>
+                   <div className="text-xl font-black text-slate-800">{financials.monthly_expenses.toLocaleString()}</div>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {financeTab === 'planning' && (
+          <div className="space-y-6 animate-fade-in">
+             <div className="p-8 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] text-white shadow-xl space-y-6">
+                <div className="space-y-1">
+                   <span className="text-[10px] font-black text-indigo-200 uppercase tracking-widest">Вечный пассивный доход</span>
+                   <h3 className="text-3xl font-black tracking-tighter">Свобода: {planningMetrics.fireCapitalToday.toLocaleString()} {financials.currency}</h3>
+                </div>
+
+                <div className="space-y-3">
+                   <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                      <span>Прогресс</span>
+                      <span>{planningMetrics.fireCoverage}%</span>
+                   </div>
+                   <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
+                      <div className="h-full bg-white transition-all duration-1000" style={{ width: `${planningMetrics.fireCoverage}%` }}></div>
+                   </div>
+                </div>
+             </div>
+
+             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
+                <div className="space-y-6">
+                   <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Доходность (%)</label>
+                         <span className="text-sm font-black text-indigo-600">{expectedYield}%</span>
+                      </div>
+                      <input 
+                         type="range" min="1" max="30" step="1"
+                         className="w-full accent-indigo-600"
+                         value={expectedYield}
+                         onChange={e => setExpectedYield(Number(e.target.value))}
+                      />
+                   </div>
+                   <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Горизонт (лет)</label>
+                         <span className="text-sm font-black text-slate-900">{planYears}</span>
+                      </div>
+                      <input 
+                         type="range" min="1" max="30" step="1"
+                         className="w-full accent-slate-900"
+                         value={planYears}
+                         onChange={e => setPlanYears(Number(e.target.value))}
+                      />
+                   </div>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {financeTab === 'operations' && (
+          <div className="space-y-4 animate-fade-in">
+             {store.transactions.map(tx => (
+                <div key={tx.id} className="p-5 bg-white border border-slate-50 rounded-3xl shadow-sm flex justify-between items-center">
+                   <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                         <i className={`fa-solid ${catIcons[tx.category] || 'fa-receipt'}`}></i>
+                      </div>
+                      <div>
+                         <h4 className="font-black text-slate-800 text-sm">{tx.category}</h4>
+                         <span className="text-[8px] font-black text-slate-400 uppercase">{new Date(tx.timestamp).toLocaleDateString()}</span>
+                      </div>
+                   </div>
+                   <div className={`text-sm font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                      {tx.type === 'income' ? '+' : '-'}{tx.amount.toLocaleString()} {financials.currency}
+                   </div>
+                </div>
+             ))}
+          </div>
+       )}
+    </div>
+  );
+
   return (
-    <div className="relative">
+    <div className="relative min-h-screen bg-[#fcfdfe]">
       {store.view === AppView.LANDING ? renderLanding() : (
         <Layout activeView={store.view} setView={store.setView}>
           {store.view === AppView.DASHBOARD && (
@@ -481,7 +349,7 @@ const App: React.FC = () => {
                
                <div className="p-8 bg-white border border-slate-100 rounded-[3rem] shadow-sm space-y-4">
                   <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Текущий Капитал</div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Чистый Капитал</div>
                     <div className="text-4xl font-black text-slate-900 tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
                   </div>
                </div>
@@ -490,7 +358,7 @@ const App: React.FC = () => {
           {store.view === AppView.SOCIAL && renderSocialFeedback()}
           {store.view === AppView.FINANCE && renderFinanceView()}
           {store.view === AppView.GOALS && (
-             <div className="space-y-6 pb-12">
+             <div className="space-y-6 pb-12 animate-fade-in">
                 <div className="flex justify-between items-center">
                    <h2 className="text-2xl font-black text-slate-800">Цели</h2>
                    <button onClick={() => setShowWizard(true)} className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center"><i className="fa-solid fa-plus"></i></button>
@@ -501,14 +369,13 @@ const App: React.FC = () => {
                          <span className="text-[9px] font-black text-slate-400 uppercase">{g.category}</span>
                          <h4 className="font-black text-slate-800">{g.title}</h4>
                       </div>
-                      {/* Added safety check for target_value division by zero */}
                       <div className="text-2xl font-black text-indigo-600">{Math.round((g.current_value / (g.target_value || 1)) * 100)}%</div>
                    </div>
                 ))}
              </div>
           )}
           {store.view === AppView.SETTINGS && (
-            <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-4">
+            <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-4 animate-fade-in">
                <div className="w-20 h-20 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-3xl font-black">{store.user.name[0]}</div>
                <h3 className="text-xl font-black text-slate-900">{store.user.name}</h3>
                <button onClick={() => window.location.reload()} className="text-rose-600 font-black text-[10px] uppercase">Выход</button>
