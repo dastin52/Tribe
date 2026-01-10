@@ -7,7 +7,6 @@ import {
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 
-// Extend window for Telegram
 declare global {
   interface Window {
     Telegram?: {
@@ -31,7 +30,6 @@ const App: React.FC = () => {
   const [selectedGoal, setSelectedGoal] = useState<YearGoal | null>(null);
   const [financeTab, setFinanceTab] = useState<'overview' | 'operations' | 'planning' | 'debts' | 'subs'>('overview');
   
-  // Telegram Integration
   useEffect(() => {
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
@@ -61,9 +59,8 @@ const App: React.FC = () => {
       xp: prev.xp + 150,
       streak: prev.streak + 1
     }));
-    
     setSelectedGoal(null);
-    alert('Прогресс зафиксирован! +150 XP');
+    alert('Прогресс зафиксирован! Вы получили +150 XP');
   };
 
   const renderLanding = () => (
@@ -73,7 +70,7 @@ const App: React.FC = () => {
           TRIBE
         </h1>
         <p className="text-slate-500 font-medium max-w-xs mx-auto">
-          Твоя личная операционная система для достижения целей через ценности и поддержку племени.
+          Твоя личная операционная система для достижения целей через поддержку окружения.
         </p>
       </div>
 
@@ -82,7 +79,7 @@ const App: React.FC = () => {
           onClick={() => store.startFresh()}
           className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all flex items-center justify-center gap-3"
         >
-          НАЧАТЬ ПУТЬ
+          НАЧАТЬ
         </button>
         <button 
           onClick={() => store.startDemo()}
@@ -123,14 +120,12 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-2xl font-black text-indigo-600">{Math.round((g.current_value / (g.target_value || 1)) * 100)}%</div>
               </div>
-              
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-indigo-600 transition-all duration-1000" 
                   style={{ width: `${Math.min(100, (g.current_value / (g.target_value || 1)) * 100)}%` }}
                 ></div>
               </div>
-              
               <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase">
                 <span>{g.current_value.toLocaleString()} / {g.target_value.toLocaleString()} {g.metric}</span>
                 <span>Уверенность: {g.confidence_level}%</span>
@@ -146,11 +141,9 @@ const App: React.FC = () => {
     <div className="space-y-6 animate-fade-in pb-12">
        <div className="px-1">
           <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Племя</h2>
-          <p className="text-sm text-slate-500 mt-1">Твое окружение — твой рычаг роста.</p>
        </div>
-
        <section className="space-y-4">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Твои Хранители</h3>
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Твое окружение</h3>
           <div className="grid grid-cols-2 gap-4">
              {store.partners.map(partner => (
                 <div key={partner.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm flex flex-col items-center text-center gap-3">
@@ -175,7 +168,6 @@ const App: React.FC = () => {
        <div className="px-1">
           <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Капитал</h2>
        </div>
-
        <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto no-scrollbar">
           {(['overview', 'operations', 'planning', 'debts', 'subs'] as const).map(tab => (
              <button
@@ -189,7 +181,6 @@ const App: React.FC = () => {
              </button>
           ))}
        </div>
-
        {financeTab === 'overview' && (
           <div className="space-y-6">
              <div className="p-8 bg-slate-900 rounded-[3rem] text-white shadow-xl space-y-4 relative overflow-hidden">
@@ -197,24 +188,12 @@ const App: React.FC = () => {
                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Чистый капитал</span>
                    <div className="text-4xl font-black tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
                 </div>
-                
                 <div className="h-24 w-full mt-4">
                    <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={balanceHistory}>
                          <Area type="monotone" dataKey="balance" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} />
                       </AreaChart>
                    </ResponsiveContainer>
-                </div>
-             </div>
-             
-             <div className="grid grid-cols-2 gap-4">
-                <div className="p-6 bg-white rounded-3xl border border-slate-100">
-                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Доходы</span>
-                   <div className="text-lg font-black text-slate-800">+{financials.monthly_income.toLocaleString()}</div>
-                </div>
-                <div className="p-6 bg-white rounded-3xl border border-slate-100">
-                   <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Расходы</span>
-                   <div className="text-lg font-black text-slate-800">-{financials.monthly_expenses.toLocaleString()}</div>
                 </div>
              </div>
           </div>
@@ -245,25 +224,19 @@ const App: React.FC = () => {
                </div>
                
                <div className="p-8 bg-white border border-slate-100 rounded-[3rem] shadow-sm space-y-4">
-                  <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Чистый Капитал</div>
-                    <div className="text-4xl font-black text-slate-900 tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
-                  </div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Чистый Капитал</div>
+                  <div className="text-4xl font-black text-slate-900 tracking-tighter">{netWorth.toLocaleString()} {financials.currency}</div>
                </div>
 
                {store.goals.length > 0 && (
                  <div className="space-y-4">
-                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Главная цель</h3>
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Текущая цель</h3>
                     <div 
                       onClick={() => setSelectedGoal(store.goals[0])}
-                      className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 cursor-pointer active:scale-[0.98] transition-all"
+                      className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl shadow-indigo-100 cursor-pointer"
                     >
                        <span className="text-[9px] font-black text-indigo-200 uppercase">{store.goals[0].category}</span>
                        <h4 className="font-black text-xl mb-2 leading-tight">{store.goals[0].title}</h4>
-                       <div className="flex justify-between text-xs font-black opacity-80 mb-2">
-                          <span>{Math.round((store.goals[0].current_value / (store.goals[0].target_value || 1)) * 100)}%</span>
-                          <span>{store.goals[0].current_value} / {store.goals[0].target_value} {store.goals[0].metric}</span>
-                       </div>
                        <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
                           <div className="h-full bg-white" style={{ width: `${(store.goals[0].current_value / (store.goals[0].target_value || 1)) * 100}%` }}></div>
                        </div>
@@ -277,25 +250,12 @@ const App: React.FC = () => {
           {store.view === AppView.GOALS && renderGoals()}
           {store.view === AppView.SETTINGS && (
             <div className="p-8 bg-slate-50 rounded-[3rem] text-center space-y-6 animate-fade-in">
-               <div className="w-24 h-24 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-4xl font-black uppercase shadow-xl shadow-indigo-100">
+               <div className="w-24 h-24 bg-indigo-600 text-white rounded-full mx-auto flex items-center justify-center text-4xl font-black shadow-xl">
                  {store.user.name[0]}
                </div>
-               <div>
-                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">{store.user.name}</h3>
-                 <p className="text-sm text-slate-400 font-medium">Адепт Племени</p>
-               </div>
-               <div className="grid grid-cols-2 gap-3">
-                  <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                     <div className="text-xs font-black text-slate-400 uppercase mb-1">Опыт (XP)</div>
-                     <div className="text-xl font-black text-indigo-600">{store.user.xp}</div>
-                  </div>
-                  <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                     <div className="text-xs font-black text-slate-400 uppercase mb-1">Стрик</div>
-                     <div className="text-xl font-black text-orange-500">{store.user.streak}</div>
-                  </div>
-               </div>
-               <button onClick={() => window.location.reload()} className="w-full py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl active:bg-rose-50 transition-colors">
-                 Сбросить сессию
+               <h3 className="text-2xl font-black text-slate-900">{store.user.name}</h3>
+               <button onClick={() => window.location.reload()} className="w-full py-4 text-rose-600 font-black text-[10px] uppercase border border-rose-100 rounded-2xl">
+                 Сбросить всё
                </button>
             </div>
           )}
@@ -319,62 +279,30 @@ const App: React.FC = () => {
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                  <i className="fa-solid fa-chevron-left"></i>
               </button>
-              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Просмотр</h3>
+              <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">Цель</h3>
               <div className="w-10"></div>
            </header>
-           
            <div className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar pb-32">
               <div className="space-y-2">
                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{selectedGoal.category}</span>
                  <h2 className="text-3xl font-black text-slate-800 tracking-tighter leading-tight">{selectedGoal.title}</h2>
               </div>
-
-              <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white space-y-6 shadow-2xl">
+              <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white space-y-6">
                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Прогресс года</span>
+                    <span className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Прогресс</span>
                     <span className="text-3xl font-black tracking-tighter">{Math.round((selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100)}%</span>
                  </div>
                  <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
                     <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${(selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100}%` }}></div>
                  </div>
-                 <div className="text-center text-xs font-bold text-slate-400 uppercase tracking-tighter">
-                    {selectedGoal.current_value.toLocaleString()} / {selectedGoal.target_value.toLocaleString()} {selectedGoal.metric}
-                 </div>
               </div>
-
-              <section className="space-y-4">
-                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Этапы реализации</h3>
-                 <div className="space-y-3">
-                    {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).length > 0 ? (
-                      store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map((sg, i) => (
-                        <div key={sg.id} className="p-5 bg-white border border-slate-100 rounded-3xl flex justify-between items-center shadow-sm">
-                            <div className="flex items-center gap-4">
-                              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
-                                  {i + 1}
-                              </div>
-                              <div>
-                                  <div className="text-sm font-black text-slate-800 leading-tight">{sg.title}</div>
-                                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Вес: {sg.weight}%</div>
-                              </div>
-                            </div>
-                            <i className="fa-solid fa-circle-check text-slate-200 text-xl"></i>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-10 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <p className="text-xs text-slate-400 font-bold italic">План формируется автоматически при создании цели...</p>
-                      </div>
-                    )}
-                 </div>
-              </section>
            </div>
-
            <footer className="p-6 border-t bg-white sticky bottom-0">
               <button 
                 onClick={() => handleUpdateProgress(selectedGoal.id)}
-                className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase tracking-widest text-sm"
+                className="w-full py-5 bg-indigo-600 text-white font-black rounded-[2rem] uppercase tracking-widest text-sm"
               >
-                 ОТМЕТИТЬ ПРОГРЕСС
+                 ОТМЕТИТЬ УСПЕХ
               </button>
            </footer>
         </div>
