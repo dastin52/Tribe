@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from './store/useStore';
-import { AppView, YearGoal, AccountabilityPartner, ProgressLog, PartnerRole, Transaction } from './types';
+import { AppView, YearGoal, AccountabilityPartner, PartnerRole, Transaction } from './types';
 import { Layout } from './components/Layout';
 import { GoalWizard } from './components/GoalWizard';
 import { 
@@ -44,7 +44,6 @@ const App: React.FC = () => {
   // Planning state
   const [planYears, setPlanYears] = useState(1);
   const [inflation, setInflation] = useState(10);
-  const [growth, setGrowth] = useState(15);
   const [expectedYield, setExpectedYield] = useState(12);
 
   // Telegram Integration
@@ -72,11 +71,10 @@ const App: React.FC = () => {
   }, [store.transactions, netWorth]);
 
   const planningMetrics = useMemo(() => {
-    const monthlyExp = financials.monthly_expenses || 1;
     const monthlyInc = financials.monthly_income || 1;
-    const i = inflation / 100;
     const yRate = expectedYield / 100;
     const n = planYears;
+    const i = inflation / 100;
     
     const fireCapitalToday = (monthlyInc * 12) / (yRate || 0.01);
     const fireCapitalFuture = fireCapitalToday * Math.pow(1 + i, n);
@@ -384,7 +382,17 @@ const App: React.FC = () => {
         </Layout>
       )}
 
-      {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g) => { store.addGoal(g); setShowWizard(false); }} />}
+      {showWizard && (
+        <GoalWizard 
+          values={store.values} 
+          onCancel={() => setShowWizard(false)} 
+          onComplete={(g, subgoals, projects) => { 
+            store.addGoal(g); 
+            // Here you could also store subgoals and projects if the store supports it
+            setShowWizard(false); 
+          }} 
+        />
+      )}
     </div>
   );
 };
