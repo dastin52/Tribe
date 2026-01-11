@@ -31,11 +31,10 @@ const App: React.FC = () => {
   const [selectedGoal, setSelectedGoal] = useState<YearGoal | null>(null);
   const [balanceVisible, setBalanceVisible] = useState(false);
   
-  // Logic for "Flip to reveal"
+  // Logic for "Flip to reveal" or tilting
   useEffect(() => {
     const handleOrientation = (event: DeviceOrientationEvent) => {
-      // Logic: if phone is turned screen down or heavily tilted
-      if (event.beta && (Math.abs(event.beta) > 160 || Math.abs(event.gamma || 0) > 80)) {
+      if (event.beta && (Math.abs(event.beta) > 150 || Math.abs(event.gamma || 0) > 70)) {
         setBalanceVisible(true);
       }
     };
@@ -49,10 +48,9 @@ const App: React.FC = () => {
       const tg = window.Telegram.WebApp;
       tg.ready();
       tg.expand();
-      tg.enableClosingConfirmation();
       
       if (store.view === AppView.LANDING) {
-        tg.MainButton.setText('НАЧАТЬ ПУТЬ');
+        tg.MainButton.setText('НАЧАТЬ ПУТЬ 🚀');
         tg.MainButton.show();
         tg.MainButton.onClick(() => store.startFresh());
       } else {
@@ -90,7 +88,6 @@ const App: React.FC = () => {
   }, [store.transactions, netWorth]);
 
   const ikigaiData = useMemo(() => {
-    // Simulated weights based on goal categories
     const counts = { finance: 0, sport: 0, growth: 0, work: 0, other: 0 };
     store.goals.forEach(g => counts[g.category]++);
     return [
@@ -113,18 +110,44 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10 text-center animate-fade-in relative overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-64 h-64 bg-violet-50 rounded-full blur-3xl opacity-50"></div>
-        <div className="relative z-10 space-y-8">
-          <div className="w-32 h-32 bg-slate-900 rounded-[3rem] flex items-center justify-center text-white text-5xl mx-auto shadow-2xl shadow-indigo-100 rotate-3">
-            <i className="fa-solid fa-mountain-sun"></i>
+        
+        <div className="relative z-10 space-y-12 w-full max-w-sm">
+          <div className="space-y-6">
+            <div className="w-28 h-28 bg-slate-900 rounded-[2.5rem] flex items-center justify-center text-white text-5xl mx-auto shadow-2xl shadow-indigo-100 rotate-3 animate-bounce-subtle">
+              <i className="fa-solid fa-mountain-sun"></i>
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-6xl font-black text-slate-900 tracking-tighter uppercase italic">Tribe</h1>
+              <p className="text-slate-400 font-bold tracking-widest text-[10px] uppercase">Social Operating System for Goals</p>
+            </div>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-6xl font-black text-slate-900 tracking-tighter uppercase italic">Tribe</h1>
-            <p className="text-slate-400 font-bold tracking-widest text-[10px] uppercase">Social Operating System for Goals</p>
-          </div>
-          <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4 max-w-[280px]">
-             <p className="text-slate-600 text-sm font-medium leading-tight">
-               Присоединяйся к 2,400+ лидерам, которые достигают целей вместе
+
+          <div className="p-8 bg-slate-50/50 backdrop-blur-sm rounded-[2.5rem] border border-slate-100 space-y-4">
+             <div className="flex -space-x-2 justify-center">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center text-[10px] shadow-sm">
+                    {['🧗','📈','🧘','🏆'][i-1]}
+                  </div>
+                ))}
+             </div>
+             <p className="text-slate-600 text-sm font-semibold leading-tight px-4">
+               Достигай целей в кругу своего Племени. С поддержкой и контролем.
              </p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={() => store.startFresh()} 
+              className="w-full py-6 bg-slate-900 text-white font-black rounded-[2rem] shadow-xl shadow-slate-200 active:scale-95 transition-all uppercase tracking-widest text-xs"
+            >
+              Начать новый путь
+            </button>
+            <button 
+              onClick={() => store.startDemo()} 
+              className="w-full py-6 bg-white text-slate-900 border-2 border-slate-100 font-black rounded-[2rem] active:scale-95 transition-all uppercase tracking-widest text-xs"
+            >
+              Посмотреть демо
+            </button>
           </div>
         </div>
       </div>
@@ -151,7 +174,7 @@ const App: React.FC = () => {
              </button>
           </div>
 
-          {/* Capital Card (Hidden by default) */}
+          {/* Capital Card */}
           <div className="bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
             <div className="space-y-1 mb-6 relative z-10">
@@ -170,14 +193,13 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Today's Agenda (Meetings & Tasks) */}
+          {/* Agenda */}
           <section className="space-y-4">
              <div className="flex justify-between items-center px-2">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Повестка дня</h3>
                 <span className="text-[9px] font-black text-indigo-500 uppercase bg-indigo-50 px-2 py-0.5 rounded-md tracking-tighter">Live</span>
              </div>
              <div className="space-y-3">
-                {/* Meetings */}
                 {store.meetings.map(m => (
                   <div key={m.id} className="p-5 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between group active:scale-98 transition-transform">
                     <div className="flex items-center gap-4">
@@ -192,7 +214,6 @@ const App: React.FC = () => {
                     <i className="fa-solid fa-video text-slate-200 text-sm"></i>
                   </div>
                 ))}
-                {/* Daily Tasks */}
                 {todayTasks.map(sg => (
                   <div key={sg.id} className="p-5 bg-indigo-50/50 rounded-[2rem] border border-indigo-100 shadow-sm flex items-center justify-between group">
                     <div className="flex items-center gap-4">
@@ -218,7 +239,6 @@ const App: React.FC = () => {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Твой Икигай и баланс жизни</p>
            </header>
 
-           {/* Ikigai Chart Simulation */}
            <div className="bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col items-center">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Жизненный баланс</span>
               <div className="w-full h-64">
@@ -243,7 +263,6 @@ const App: React.FC = () => {
               </div>
            </div>
 
-           {/* AI Evaluation */}
            <div className="p-8 bg-slate-900 rounded-[3.5rem] text-white space-y-4 shadow-xl">
               <div className="flex items-center gap-3">
                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
@@ -254,13 +273,8 @@ const App: React.FC = () => {
               <p className="text-sm text-slate-400 leading-relaxed font-medium italic">
                 "У тебя отличный фокус на финансах, но социальный сектор проседает. Твое Племя (Social) может дать больше энергии, если ты откроешь для них 2-3 цели для верификации."
               </p>
-              <div className="flex gap-2 pt-2">
-                 <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-bold uppercase tracking-widest">Амбициозность: 85%</span>
-                 <span className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-bold uppercase tracking-widest">Стабильность: 60%</span>
-              </div>
            </div>
 
-           {/* Private Goals List */}
            <section className="space-y-4">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Контроль доступа</h3>
               <div className="space-y-3">
@@ -300,16 +314,9 @@ const App: React.FC = () => {
               </div>
             ))}
           </div>
-
-          <div className="p-10 bg-indigo-600 rounded-[3rem] text-white shadow-xl shadow-indigo-200 text-center space-y-4">
-             <h4 className="text-2xl font-black tracking-tight leading-none uppercase italic">Добавь верификатора</h4>
-             <p className="text-xs text-indigo-100 opacity-80 font-medium">Верифицированные цели растут в 3 раза быстрее за счет ответственности перед Племенем.</p>
-             <button className="w-full py-4 bg-white text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">Пригласить друга</button>
-          </div>
         </div>
       )}
-      
-      {/* Fallback tabs (Finance, Goals, etc. preserved but simplified in this context) */}
+
       {store.view === AppView.GOALS && (
         <div className="space-y-6 animate-fade-in pb-12">
           <header className="flex justify-between items-end px-2">
