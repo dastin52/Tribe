@@ -112,6 +112,33 @@ export function useStore() {
     });
   };
 
+  const addTransaction = (amount: number, type: 'income' | 'expense', category: string, note?: string) => {
+    const newTx: Transaction = {
+      id: crypto.randomUUID(),
+      amount,
+      type,
+      category,
+      note,
+      timestamp: new Date().toISOString()
+    };
+    
+    setTransactions(prev => [...prev, newTx]);
+    
+    setUser(prev => {
+      const financials = prev.financials || INITIAL_USER.financials!;
+      return {
+        ...prev,
+        financials: {
+          ...financials,
+          total_assets: type === 'income' ? financials.total_assets + amount : financials.total_assets - amount,
+          monthly_income: type === 'income' ? financials.monthly_income + amount : financials.monthly_income,
+          monthly_expenses: type === 'expense' ? financials.monthly_expenses + amount : financials.monthly_expenses,
+        }
+      };
+    });
+    awardXP(50);
+  };
+
   const startDemo = () => {
     const g1Id = crypto.randomUUID();
     const g2Id = crypto.randomUUID();
@@ -209,6 +236,6 @@ export function useStore() {
   return {
     user, setUser, view, setView, values, goals, addGoalWithPlan, partners, reviews, 
     loading, startDemo, startFresh, debts, subscriptions, transactions, meetings,
-    subgoals, projects, updateSubgoalProgress, toggleGoalPrivacy
+    subgoals, projects, updateSubgoalProgress, toggleGoalPrivacy, addTransaction
   };
 }
