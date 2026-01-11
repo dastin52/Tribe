@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { User, Value, YearGoal, AppView, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project, Meeting } from '../types';
+import { User, Value, YearGoal, AppView, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project, Meeting, DebtCategory, DebtDirection } from '../types';
 
 const INITIAL_USER: User = {
   id: 'user-' + Math.random().toString(36).substr(2, 9),
@@ -139,6 +139,18 @@ export function useStore() {
     awardXP(50);
   };
 
+  const addDebt = (debt: Omit<Debt, 'id'>) => {
+    const newDebt: Debt = { ...debt, id: crypto.randomUUID() };
+    setDebts(prev => [...prev, newDebt]);
+    awardXP(100);
+  };
+
+  const addSubscription = (sub: Omit<Subscription, 'id'>) => {
+    const newSub: Subscription = { ...sub, id: crypto.randomUUID() };
+    setSubscriptions(prev => [...prev, newSub]);
+    awardXP(50);
+  };
+
   const startDemo = () => {
     const g1Id = crypto.randomUUID();
     const g2Id = crypto.randomUUID();
@@ -171,6 +183,16 @@ export function useStore() {
     setTransactions([
       { id: 't1', amount: 150000, type: 'income', category: 'Зарплата', timestamp: new Date(Date.now() - 86400000 * 2).toISOString() },
       { id: 't2', amount: 35000, type: 'expense', category: 'Накопления', timestamp: new Date(Date.now() - 86400000).toISOString(), note: 'На велосипед' }
+    ]);
+
+    setDebts([
+      { id: 'd1', title: 'Сбербанк (Кредитка)', total_amount: 50000, remaining_amount: 35000, type: 'i_owe', category: 'card', due_date: '2025-12-12' },
+      { id: 'd2', title: 'Алексей (Друг)', total_amount: 10000, remaining_amount: 10000, type: 'they_owe', category: 'friend', due_date: '2025-05-20' }
+    ]);
+
+    setSubscriptions([
+      { id: 's1', title: 'Telegram Premium', amount: 299, period: 'monthly', category: 'digital', next_billing_date: '2025-04-10' },
+      { id: 's2', title: 'Фитнес-клуб', amount: 3500, period: 'monthly', category: 'sport', next_billing_date: '2025-04-01' }
     ]);
 
     setUser({ 
@@ -236,6 +258,7 @@ export function useStore() {
   return {
     user, setUser, view, setView, values, goals, addGoalWithPlan, partners, reviews, 
     loading, startDemo, startFresh, debts, subscriptions, transactions, meetings,
-    subgoals, projects, updateSubgoalProgress, toggleGoalPrivacy, addTransaction
+    subgoals, projects, updateSubgoalProgress, toggleGoalPrivacy, addTransaction,
+    addDebt, addSubscription
   };
 }

@@ -61,13 +61,17 @@ export interface Project {
   complexity?: number;
 }
 
+export type DebtCategory = 'bank' | 'card' | 'friend' | 'other';
+export type DebtDirection = 'i_owe' | 'they_owe';
+
 export interface Debt {
   id: string;
   title: string;
   total_amount: number;
   remaining_amount: number;
-  interest_rate?: number;
   due_date?: string;
+  type: DebtDirection;
+  category: DebtCategory;
 }
 
 export interface Subscription {
@@ -76,6 +80,7 @@ export interface Subscription {
   amount: number;
   period: 'monthly' | 'yearly';
   category: string;
+  next_billing_date?: string;
 }
 
 export interface FinancialSnapshot {

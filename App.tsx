@@ -147,6 +147,8 @@ const App: React.FC = () => {
           netWorth={netWorth}
           balanceHistory={balanceHistory}
           onAddTransaction={store.addTransaction}
+          onAddDebt={store.addDebt}
+          onAddSubscription={store.addSubscription}
         />
       )}
 
