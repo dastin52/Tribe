@@ -2,13 +2,29 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const geminiService = {
-  // Шаг коучинга: Задает один острый вопрос "Зачем?" или дает краткую пометку
+  // Use gemini-3-flash-preview for basic text advice
+  async getDailyBriefing(goals: any[], financials: any, energyStatus: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Ты - ИИ-советник системы Tribe. 
+        Цели: ${JSON.stringify(goals.map(g => g.title))}. 
+        Финансы: ${JSON.stringify(financials)}. 
+        Статус энергии: ${energyStatus}.
+        Дай ОДИН короткий совет (до 20 слов) на сегодня. 
+        Сфокусируйся на связи финансов и главной цели.`,
+      });
+      return response.text;
+    } catch (e) {
+      return "Сегодня отличный день, чтобы закрыть одну маленькую задачу.";
+    }
+  },
+
+  // Use gemini-3-flash-preview for conversational insights
   async getCoachingInsight(category: string, title: string, userMessage?: string) {
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API Key is missing");
-
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = userMessage 
         ? `Пользователь хочет: "${title}" (${category}). Его мотивация: "${userMessage}". 
            Дай ОДНУ короткую пометку (до 15 слов) и предложи идеальный срок (в месяцах) для этой цели. 
@@ -38,14 +54,12 @@ export const geminiService = {
     }
   },
 
+  // Use gemini-3-pro-preview for advanced reasoning (goal decomposition)
   async decomposeGoal(goalTitle: string, metric: string, target: number, category: string, description: string) {
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API Key is missing");
-
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: `Декомпозируй цель "${goalTitle}" (${target} ${metric}). 
         Контекст: ${description}. Категория: ${category}.
         Разбей на 3 конкретных подцели (milestones). Без воды. 

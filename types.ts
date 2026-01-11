@@ -18,6 +18,7 @@ export interface Transaction {
   category: string;
   note?: string;
   timestamp: string;
+  goal_id?: string; // Связь с финансовой целью
 }
 
 export interface Meeting {
@@ -48,7 +49,7 @@ export interface SubGoal {
   deadline: string;
   frequency: TaskFrequency;
   estimated_days?: number;
-  auto_calculate_amount?: number; 
+  difficulty: number; // 1-10
 }
 
 export interface Project {
@@ -62,7 +63,7 @@ export interface Project {
 }
 
 export type DebtCategory = 'bank' | 'card' | 'friend' | 'other';
-export type DebtDirection = 'i_owe' | 'they_owe';
+export type DebtDirection = 'i_owe';
 
 export interface Debt {
   id: string;
@@ -70,7 +71,7 @@ export interface Debt {
   total_amount: number;
   remaining_amount: number;
   due_date?: string;
-  type: DebtDirection;
+  type: DebtDirection | 'they_owe';
   category: DebtCategory;
 }
 
@@ -115,15 +116,13 @@ export interface AccountabilityPartner {
   avatar?: string;
 }
 
+// Added PartnerReview interface
 export interface PartnerReview {
   id: string;
   partner_id: string;
-  log_id: string;
-  rating: number; // 1-5
-  comment: string;
-  reaction: 'fire' | 'slow' | 'doubt' | 'strong';
+  content: string;
+  rating: number;
   timestamp: string;
-  is_verified: boolean;
 }
 
 export interface ProgressLog {
@@ -134,6 +133,7 @@ export interface ProgressLog {
   value: number;
   confidence: number;
   is_verified?: boolean;
+  verified_by?: string;
 }
 
 export interface YearGoal {
@@ -149,10 +149,11 @@ export interface YearGoal {
   end_date: string;
   status: GoalStatus;
   confidence_level: number;
+  difficulty: number; // 1-10
   logs: ProgressLog[];
   partner_id?: string;
   is_shared?: boolean;
-  is_private?: boolean; // Новое поле для конфиденциальности целей
+  is_private?: boolean;
 }
 
 export interface Value {
