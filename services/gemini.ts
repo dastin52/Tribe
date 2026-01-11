@@ -10,7 +10,11 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Проверь цель на соответствие ценности "${value}". Цель: "${goalTitle}", Метрика: "${goalMetric}". Оцени реалистичность и дай краткий совет. Ответь в формате JSON: { "isValid": boolean, "feedback": string, "suggestedDeadlineMonths": number }`,
+        contents: `Проверь цель на соответствие ценности "${value}". 
+        Цель: "${goalTitle}", Метрика: "${goalMetric}". 
+        Оцени реалистичность по SMART и дай краткий, жесткий совет в стиле коуча. 
+        Если метрика "${goalMetric}" не подходит к цели "${goalTitle}", укажи на это.
+        Ответь в формате JSON: { "isValid": boolean, "feedback": string, "suggestedDeadlineMonths": number }`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -27,7 +31,7 @@ export const geminiService = {
       return JSON.parse(response.text || '{}');
     } catch (error) {
       console.error("Gemini API Error:", error);
-      return { isValid: true, feedback: "Проверка временно недоступна, но цель выглядит достойно!", suggestedDeadlineMonths: 12 };
+      return { isValid: true, feedback: "Цель принята. ИИ временно отдыхает, но я верю в тебя!", suggestedDeadlineMonths: 6 };
     }
   },
 
@@ -39,10 +43,13 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Разложи цель "${goalTitle}" (${category}, ${metric}: ${target}) на конкретные шаги с расписанием. 
-        Если это финансовая цель, рассчитай, сколько нужно откладывать (auto_calculate_amount).
-        Определи частоту выполнения: daily, weekly, monthly. 
-        Верни JSON структуру с subGoals и projects.`,
+        contents: `Разложи цель "${goalTitle}" (Категория: ${category}, Цель: ${target} ${metric}) на 3-5 конкретных подцелей (subGoals). 
+        ВАЖНО: Если это НЕ финансовая цель, НЕ используй денежные метрики. 
+        Для спорта используй: км, тренировки, подходы. 
+        Для развития: часы, книги, уроки. 
+        Для работы: задачи, проекты, часы.
+        Рассчитай частоту выполнения (daily, weekly, monthly). 
+        Верни JSON структуру.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -56,9 +63,8 @@ export const geminiService = {
                     title: { type: Type.STRING },
                     metric: { type: Type.STRING },
                     target_value: { type: Type.NUMBER },
-                    weight: { type: Type.NUMBER },
-                    frequency: { type: Type.STRING, description: "daily, weekly, monthly, once" },
-                    auto_calculate_amount: { type: Type.NUMBER, description: "Calculated saving amount if finance goal" }
+                    weight: { type: Type.NUMBER, description: "Процент влияния на основную цель от 1 до 100" },
+                    frequency: { type: Type.STRING, description: "daily, weekly, monthly, once" }
                   },
                   required: ["title", "metric", "target_value", "weight", "frequency"]
                 }
@@ -85,9 +91,9 @@ export const geminiService = {
     } catch (error) {
       console.error("Gemini API Error:", error);
       return {
-        subGoals: [{ title: "Сделать первый шаг", metric: metric, target_value: target, weight: 100, frequency: "once" }],
-        projects: [{ title: "Подготовительный этап", estimated_effort_hours: 5, complexity: 1 }],
-        suggestedHabits: ["Ежедневный прогресс"]
+        subGoals: [{ title: "Начать действовать", metric: metric, target_value: target, weight: 100, frequency: "daily" }],
+        projects: [{ title: "Подготовка", estimated_effort_hours: 2, complexity: 1 }],
+        suggestedHabits: ["Регулярность"]
       };
     }
   }
