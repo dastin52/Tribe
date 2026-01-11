@@ -20,8 +20,7 @@ export const geminiService = {
           }
         }
       });
-      const text = response.text;
-      return JSON.parse(text || '{}');
+      return JSON.parse(response.text || '{}');
     } catch (error) {
       console.error("Gemini API Error:", error);
       return { isValid: true, feedback: "Проверка временно недоступна, но цель выглядит достойно!", suggestedDeadlineMonths: 12 };
@@ -71,8 +70,7 @@ export const geminiService = {
           }
         }
       });
-      const text = response.text;
-      return JSON.parse(text || '{}');
+      return JSON.parse(response.text || '{}');
     } catch (error) {
       console.error("Gemini API Error:", error);
       return {
