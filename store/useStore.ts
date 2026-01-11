@@ -4,7 +4,7 @@ import { User, Value, YearGoal, AppView, AccountabilityPartner, Debt, Subscripti
 import { geminiService } from '../services/gemini';
 
 const INITIAL_USER: User = {
-  id: 'user-' + Math.random().toString(36).substr(2, 9),
+  id: 'user-main',
   name: 'Лидер Племени',
   xp: 0,
   level: 1,
@@ -20,10 +20,57 @@ const INITIAL_USER: User = {
   energy_profile: { peak_hours: [9, 10, 11, 16, 17], low_energy_hours: [14, 22, 23] }
 };
 
-const DEFAULT_PARTNERS: AccountabilityPartner[] = [
-  { id: 'p1', name: 'Мария', role: 'guardian', avatar: 'https://i.pravatar.cc/150?u=p1' },
-  { id: 'p2', name: 'Алекс', role: 'accomplice', avatar: 'https://i.pravatar.cc/150?u=p2' }
-];
+const getSampleData = () => {
+  const now = new Date();
+  const goalId = crypto.randomUUID();
+  
+  const sampleGoals: YearGoal[] = [{
+    id: goalId, 
+    category: 'finance', 
+    value_id: 'v1', 
+    title: 'Путь к Свободе (1M)', 
+    metric: '₽', 
+    target_value: 1000000, 
+    current_value: 120000, 
+    start_date: now.toISOString(), 
+    end_date: new Date(now.getFullYear(), 11, 31).toISOString(), 
+    status: 'active', 
+    confidence_level: 90, 
+    difficulty: 7, 
+    logs: [
+      { id: 'log-initial', goal_id: goalId, timestamp: now.toISOString(), value: 120000, confidence: 1, is_verified: true, verified_by: 'p1', user_id: 'user-main' }
+    ], 
+    is_private: false, 
+    is_shared: true
+  }];
+
+  const sampleSubgoals: SubGoal[] = [
+    { id: 'sg1', year_goal_id: goalId, title: 'Формирование подушки', metric: '₽', target_value: 50000, current_value: 50000, weight: 30, deadline: now.toISOString(), frequency: 'once', difficulty: 3, is_completed: true },
+    { id: 'sg2', year_goal_id: goalId, title: 'Инвестиции в акции', metric: '₽', target_value: 70000, current_value: 20000, weight: 70, deadline: new Date(now.getTime() + 30 * 86400000).toISOString(), frequency: 'monthly', difficulty: 5 }
+  ];
+
+  const samplePartners: AccountabilityPartner[] = [
+    { id: 'p1', name: 'Мария', role: 'guardian', avatar: 'https://i.pravatar.cc/150?u=maria', xp: 1200 },
+    { id: 'p2', name: 'Алекс', role: 'sensei', avatar: 'https://i.pravatar.cc/150?u=alex', xp: 4500 }
+  ];
+
+  const sampleTxs: Transaction[] = [
+    { id: 'tx1', amount: 150000, type: 'income', category: 'Зарплата', note: 'Основной доход', timestamp: now.toISOString() },
+    { id: 'tx2', amount: 4500, type: 'expense', category: 'Продукты', note: 'Закупка на неделю', timestamp: now.toISOString() }
+  ];
+
+  const sampleDebts: Debt[] = [
+    { id: 'd1', title: 'Рассрочка за iPhone', total_amount: 80000, remaining_amount: 45000, type: 'i_owe', category: 'other' },
+    { id: 'd2', title: 'Долг от Олега', total_amount: 15000, remaining_amount: 15000, type: 'they_owe', category: 'friend' }
+  ];
+
+  const sampleSubs: Subscription[] = [
+    { id: 's1', title: 'Netflix', amount: 990, period: 'monthly', category: 'Развлечения' },
+    { id: 's2', title: 'Фитнес-клуб', amount: 3500, period: 'monthly', category: 'Здоровье' }
+  ];
+
+  return { sampleGoals, sampleSubgoals, samplePartners, sampleTxs, sampleDebts, sampleSubs };
+};
 
 export function useStore() {
   const [user, setUser] = useState<User>(INITIAL_USER);
@@ -34,7 +81,7 @@ export function useStore() {
     { id: 'v1', title: 'Свобода', description: 'Возможность выбирать свой путь', priority: 5 },
     { id: 'v2', title: 'Здоровье', description: 'Энергия для великих дел', priority: 4 }
   ]);
-  const [partners, setPartners] = useState<AccountabilityPartner[]>(DEFAULT_PARTNERS);
+  const [partners, setPartners] = useState<AccountabilityPartner[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -42,24 +89,48 @@ export function useStore() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const saved = {
-      user: localStorage.getItem('tribe_user'),
-      goals: localStorage.getItem('tribe_goals'),
-      subgoals: localStorage.getItem('tribe_subgoals'),
-      values: localStorage.getItem('tribe_values'),
-      txs: localStorage.getItem('tribe_txs'),
-      debts: localStorage.getItem('tribe_debts'),
-      subs: localStorage.getItem('tribe_subs')
-    };
-    try {
-      if (saved.user) setUser(JSON.parse(saved.user));
-      if (saved.goals) setGoals(JSON.parse(saved.goals));
-      if (saved.subgoals) setSubgoals(JSON.parse(saved.subgoals));
-      if (saved.values) setValues(JSON.parse(saved.values));
-      if (saved.txs) setTransactions(JSON.parse(saved.txs));
-      if (saved.debts) setDebts(JSON.parse(saved.debts));
-      if (saved.subs) setSubscriptions(JSON.parse(saved.subs));
-    } catch (e) { console.error("Store init error"); }
+    const savedGoals = localStorage.getItem('tribe_goals');
+    
+    // Если данных нет - создаем приветственный пакет
+    if (!savedGoals) {
+      const { sampleGoals, sampleSubgoals, samplePartners, sampleTxs, sampleDebts, sampleSubs } = getSampleData();
+      setGoals(sampleGoals);
+      setSubgoals(sampleSubgoals);
+      setPartners(samplePartners);
+      setTransactions(sampleTxs);
+      setDebts(sampleDebts);
+      setSubscriptions(sampleSubs);
+      
+      const updatedUser = { ...INITIAL_USER, level: 2, xp: 250, financials: { 
+        total_assets: 120000, 
+        total_debts: 45000, 
+        monthly_income: 150000, 
+        monthly_expenses: 4500, 
+        currency: '₽' 
+      }};
+      setUser(updatedUser);
+    } else {
+      try {
+        const saved = {
+          user: localStorage.getItem('tribe_user'),
+          goals: savedGoals,
+          subgoals: localStorage.getItem('tribe_subgoals'),
+          values: localStorage.getItem('tribe_values'),
+          txs: localStorage.getItem('tribe_txs'),
+          debts: localStorage.getItem('tribe_debts'),
+          subs: localStorage.getItem('tribe_subs'),
+          partners: localStorage.getItem('tribe_partners')
+        };
+        if (saved.user) setUser(JSON.parse(saved.user));
+        if (saved.goals) setGoals(JSON.parse(saved.goals));
+        if (saved.subgoals) setSubgoals(JSON.parse(saved.subgoals));
+        if (saved.values) setValues(JSON.parse(saved.values));
+        if (saved.txs) setTransactions(JSON.parse(saved.txs));
+        if (saved.debts) setDebts(JSON.parse(saved.debts));
+        if (saved.subs) setSubscriptions(JSON.parse(saved.subs));
+        if (saved.partners) setPartners(JSON.parse(saved.partners));
+      } catch (e) { console.error("Store init error", e); }
+    }
     setLoading(false);
   }, []);
 
@@ -72,8 +143,9 @@ export function useStore() {
       localStorage.setItem('tribe_txs', JSON.stringify(transactions));
       localStorage.setItem('tribe_debts', JSON.stringify(debts));
       localStorage.setItem('tribe_subs', JSON.stringify(subscriptions));
+      localStorage.setItem('tribe_partners', JSON.stringify(partners));
     }
-  }, [user, goals, subgoals, values, transactions, debts, subscriptions, loading]);
+  }, [user, goals, subgoals, values, transactions, debts, subscriptions, partners, loading]);
 
   const awardXP = (amount: number, difficulty: number = 1) => {
     setUser(prev => {
@@ -85,10 +157,11 @@ export function useStore() {
     });
   };
 
-  const updateSubgoalProgress = (sgId: string, value: number) => {
+  const updateSubgoalProgress = (sgId: string, value: number, forceVerify: boolean = false) => {
     setSubgoals(prev => prev.map(sg => {
       if (sg.id === sgId) {
         const newValue = sg.current_value + value;
+        const isNowCompleted = newValue >= sg.target_value;
         const log: ProgressLog = {
           id: crypto.randomUUID(),
           goal_id: sg.year_goal_id,
@@ -96,45 +169,22 @@ export function useStore() {
           timestamp: new Date().toISOString(),
           value,
           confidence: 1,
-          is_verified: false
+          is_verified: forceVerify,
+          verified_by: forceVerify ? 'self' : undefined,
+          user_id: user.id
         };
-        setGoals(gPrev => gPrev.map(g => g.id === sg.year_goal_id ? { ...g, logs: [...(g.logs || []), log] } : g));
-        return { ...sg, current_value: Math.min(sg.target_value, newValue) };
+        setGoals(gPrev => gPrev.map(g => g.id === sg.year_goal_id ? { ...g, logs: [...(g.logs || []), log], current_value: forceVerify ? g.current_value + value : g.current_value } : g));
+        return { ...sg, current_value: newValue, is_completed: isNowCompleted };
       }
       return sg;
     }));
     awardXP(100, 5);
   };
 
-  const generateGoalVision = async (goalId: string) => {
-    const goal = goals.find(g => g.id === goalId);
-    if (!goal) return;
-    const imageUrl = await geminiService.generateGoalVision(goal.title, goal.description || "");
-    if (imageUrl) {
-      setGoals(prev => prev.map(g => g.id === goalId ? { ...g, image_url: imageUrl } : g));
-      awardXP(200);
-    }
-  };
-
-  const verifyProgress = (goalId: string, logId: string) => {
-    setGoals(prev => prev.map(g => {
-      if (g.id === goalId) {
-        const updatedLogs = g.logs.map(l => l.id === logId ? { ...l, is_verified: true, verified_by: partners[0].id } : l);
-        const verifiedValue = updatedLogs.filter(l => l.is_verified).reduce((acc, l) => acc + l.value, 0);
-        return { ...g, logs: updatedLogs, current_value: verifiedValue };
-      }
-      return g;
-    }));
-    awardXP(300);
-  };
-
   const addTransaction = (amount: number, type: 'income' | 'expense', category: string, note?: string, goal_id?: string) => {
     const newTx: Transaction = { id: crypto.randomUUID(), amount, type, category, note, timestamp: new Date().toISOString(), goal_id };
     setTransactions(p => [...p, newTx]);
-    if (goal_id && type === 'expense') {
-       const log: ProgressLog = { id: crypto.randomUUID(), goal_id, timestamp: new Date().toISOString(), value: amount, confidence: 1, is_verified: true };
-       setGoals(p => p.map(g => g.id === goal_id ? { ...g, current_value: g.current_value + amount, logs: [...g.logs, log] } : g));
-    }
+    
     setUser(prev => {
       const f = prev.financials || INITIAL_USER.financials!;
       return { ...prev, financials: { ...f, 
@@ -148,28 +198,34 @@ export function useStore() {
 
   return {
     user, view, setView, goals, subgoals, values, transactions, debts, subscriptions, meetings, partners, loading,
-    updateSubgoalProgress, addTransaction, awardXP, verifyProgress, generateGoalVision,
-    addValue: (v: Omit<Value, 'id'>) => setValues(p => [...p, { ...v, id: crypto.randomUUID() }]),
+    updateSubgoalProgress, addTransaction, awardXP, verifyProgress: (gId: string, lId: string, vId: string) => {
+       setGoals(prev => prev.map(g => {
+         if (g.id === gId) {
+           const updatedLogs = g.logs.map(l => l.id === lId ? { ...l, is_verified: true, verified_by: vId } : l);
+           const verifiedValue = updatedLogs.filter(l => l.is_verified).reduce((acc, l) => acc + l.value, 0);
+           return { ...g, logs: updatedLogs, current_value: verifiedValue };
+         }
+         return g;
+       }));
+       awardXP(300);
+    }, 
+    generateGoalVision: async (goalId: string) => {
+      const goal = goals.find(g => g.id === goalId);
+      if (!goal) return;
+      const imageUrl = await geminiService.generateGoalVision(goal.title, goal.description || "");
+      if (imageUrl) {
+        setGoals(prev => prev.map(g => g.id === goalId ? { ...g, image_url: imageUrl } : g));
+        awardXP(200);
+      }
+    },
+    addPartner: (name: string, role: string) => {
+      setPartners(p => [...p, { id: 'p-' + crypto.randomUUID(), name, role: role as any, avatar: `https://i.pravatar.cc/150?u=${name}`, xp: 0 }]);
+    },
     addDebt: (d: any) => setDebts(prev => [...prev, { ...d, id: crypto.randomUUID() }]),
     addSubscription: (s: any) => setSubscriptions(prev => [...prev, { ...s, id: crypto.randomUUID() }]),
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); awardXP(500, g.difficulty); },
     toggleGoalPrivacy: (id: string) => setGoals(p => p.map(g => g.id === id ? {...g, is_private: !g.is_private} : g)),
     updateUserInfo: (d: any) => setUser(p => ({...p, ...d})),
-    resetData: () => { localStorage.clear(); window.location.reload(); },
-    startDemo: () => {
-      const now = new Date();
-      const g1Id = crypto.randomUUID();
-      setGoals([{
-        id: g1Id, category: 'finance', value_id: 'v1', title: 'Капитал Свободы', metric: '₽', 
-        target_value: 1000000, current_value: 450000, start_date: now.toISOString(), 
-        end_date: new Date(now.getTime() + 365 * 86400000).toISOString(), status: 'active', 
-        confidence_level: 85, difficulty: 8, logs: [
-          { id: 'l1', goal_id: g1Id, timestamp: now.toISOString(), value: 450000, confidence: 1, is_verified: true, verified_by: 'p1' }
-        ], is_private: false
-      }]);
-      setSubgoals([{ id: 'sg1', year_goal_id: g1Id, title: 'Пополнение ИИС', metric: '₽', target_value: 50000, current_value: 10000, weight: 100, deadline: now.toISOString(), frequency: 'monthly', difficulty: 4 }]);
-      setUser({ ...INITIAL_USER, level: 3, xp: 450, streak: 12, financials: { ...INITIAL_USER.financials!, total_assets: 450000 } });
-      setView(AppView.DASHBOARD);
-    }
+    resetData: () => { localStorage.clear(); window.location.reload(); }
   };
 }

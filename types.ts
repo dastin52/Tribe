@@ -29,7 +29,7 @@ export interface Meeting {
   category: GoalCategory;
 }
 
-export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'quarterly';
+export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly';
 
 export interface SubGoal {
   id: string;
@@ -42,6 +42,7 @@ export interface SubGoal {
   deadline: string;
   frequency: TaskFrequency;
   difficulty: number;
+  is_completed?: boolean;
 }
 
 export interface Project {
@@ -98,6 +99,7 @@ export interface AccountabilityPartner {
   name: string;
   role: PartnerRole;
   avatar?: string;
+  xp?: number;
 }
 
 export interface ProgressLog {
@@ -109,6 +111,7 @@ export interface ProgressLog {
   confidence: number;
   is_verified?: boolean;
   verified_by?: string;
+  user_id: string; // Кто сделал вклад
 }
 
 export interface YearGoal {
@@ -126,8 +129,10 @@ export interface YearGoal {
   confidence_level: number;
   difficulty: number;
   logs: ProgressLog[];
-  image_url?: string; // Сгенерированное ИИ видение
+  image_url?: string; 
   is_private?: boolean;
+  is_shared?: boolean;
+  participant_ids?: string[]; // Список ID участников
 }
 
 export interface Value {
