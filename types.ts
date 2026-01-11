@@ -4,9 +4,9 @@ export type GoalCategory = "finance" | "sport" | "growth" | "work" | "other";
 export type PartnerRole = 
   | 'accomplice'  // Сообщник
   | 'guardian'    // Хранитель
-  | 'sensei'      // Сэнсэй
-  | 'teammate'    // Тиммейт
-  | 'navigator'   // Штурман
+  | 'sensei'      // Наставник
+  | 'teammate'    // Коллега
+  | 'navigator'   // Навигатор
   | 'roaster';     // Критик
 
 export type TransactionType = 'income' | 'expense';
@@ -111,7 +111,7 @@ export interface ProgressLog {
   confidence: number;
   is_verified?: boolean;
   verified_by?: string;
-  user_id: string; // Кто сделал вклад
+  user_id: string;
 }
 
 export interface YearGoal {
@@ -132,7 +132,7 @@ export interface YearGoal {
   image_url?: string; 
   is_private?: boolean;
   is_shared?: boolean;
-  participant_ids?: string[]; // Список ID участников
+  participant_ids?: string[];
 }
 
 export interface Value {

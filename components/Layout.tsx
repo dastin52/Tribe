@@ -21,7 +21,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, setView })
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-xl relative overflow-hidden">
       <header className="px-6 py-4 flex justify-between items-center border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-        <h1 className="text-xl font-black bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tighter">
+        <h1 className="text-xl font-black bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tracking-tighter italic">
           TRIBE
         </h1>
         <div className="flex items-center gap-3">
@@ -48,7 +48,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, setView })
             }`}
           >
             <i className={`fa-solid ${item.icon} text-[1.1rem]`}></i>
-            <span className="text-[9px] font-black uppercase tracking-tighter">{item.label}</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter italic">{item.label}</span>
           </button>
         ))}
       </nav>
