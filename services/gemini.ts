@@ -1,18 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Инициализация с проверкой наличия ключа
-const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.warn("API Key is missing. Check your Cloudflare environment variables.");
-  }
-  return new GoogleGenAI({ apiKey: apiKey || "dummy-key" });
-};
-
 export const geminiService = {
   async validateGoal(value: string, goalTitle: string, goalMetric: string) {
     try {
-      const ai = getAiClient();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Проверь цель на соответствие ценности "${value}". Цель: "${goalTitle}", Метрика: "${goalMetric}". Оцени реалистичность и дай краткий совет. Ответь в формате JSON: { "isValid": boolean, "feedback": string, "suggestedDeadlineMonths": number }`,
@@ -38,7 +29,7 @@ export const geminiService = {
 
   async decomposeGoal(goalTitle: string, metric: string, target: number, category: string) {
     try {
-      const ai = getAiClient();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Разложи цель "${goalTitle}" (${category}, ${metric}: ${target}) на шаги. Для каждого шага укажи реалистичную длительность в днях. Верни JSON структуру с subGoals и projects.`,
