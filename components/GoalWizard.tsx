@@ -19,7 +19,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
     metric: '',
     category: 'growth',
     target_value: 0,
-    value_id: values[0]?.id || '',
+    value_id: values[0]?.id || 'default_value',
     status: 'active' as GoalStatus,
     confidence_level: 50
   });
@@ -45,10 +45,10 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
       setLoading(true);
       try {
         const val = values.find(v => v.id === goalData.value_id);
-        const result = await geminiService.validateGoal(val?.title || 'Развитие', goalData.title!, goalData.metric!);
+        const result = await geminiService.validateGoal(val?.title || 'Общее развитие', goalData.title!, goalData.metric!);
         
         if (result.isValid === false && result.feedback) {
-          setError(`AI: ${result.feedback}`);
+          setError(`Совет AI: ${result.feedback}`);
           setLoading(false);
           return;
         }
@@ -85,7 +85,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
     const finalGoal: YearGoal = {
       id: goalId,
       category: goalData.category as GoalCategory || 'growth',
-      value_id: goalData.value_id || '',
+      value_id: goalData.value_id || 'default',
       title: goalData.title || '',
       description: goalData.description || '',
       metric: goalData.metric || '',
@@ -147,13 +147,21 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
 
             <div className="space-y-5 pt-4">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ценность</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Сфера жизни</label>
                 <select 
                   className="w-full mt-1 p-4 bg-slate-50 rounded-2xl border-none ring-2 ring-slate-100 focus:ring-indigo-500 transition-all font-semibold outline-none appearance-none"
                   value={goalData.value_id}
                   onChange={e => setGoalData({...goalData, value_id: e.target.value})}
                 >
-                  {values.length > 0 ? values.map(v => <option key={v.id} value={v.id}>{v.title}</option>) : <option value="">Выберите сферу</option>}
+                  {values.length > 0 ? (
+                    values.map(v => <option key={v.id} value={v.id}>{v.title}</option>)
+                  ) : (
+                    <>
+                      <option value="v_gen">Личный рост</option>
+                      <option value="v_fin">Финансовая свобода</option>
+                      <option value="v_hlt">Здоровье и энергия</option>
+                    </>
+                  )}
                 </select>
               </div>
               
@@ -170,7 +178,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Метрика</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ед. измерения</label>
                   <input 
                     type="text" 
                     placeholder="км / руб"
@@ -180,7 +188,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Цель</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Целевой план</label>
                   <input 
                     type="number" 
                     className="w-full mt-1 p-4 bg-slate-50 rounded-2xl border-none ring-2 ring-slate-100 focus:ring-indigo-500 transition-all outline-none font-bold"
@@ -212,7 +220,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
             </div>
 
             <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 text-slate-500 text-xs leading-relaxed text-center">
-              Мы декомпозируем эту цель на несколько этапов, чтобы путь был понятным и управляемым.
+              ИИ декомпозирует эту цель на несколько этапов, чтобы путь был понятным и управляемым.
             </div>
           </div>
         )}
