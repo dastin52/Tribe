@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import React, { useMemo } from 'react';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { YearGoal, AccountabilityPartner } from '../types';
 
 interface AnalyticsViewProps {
@@ -11,15 +11,60 @@ interface AnalyticsViewProps {
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ goals, partners, ikigaiData, onTogglePrivacy }) => {
+  
+  const activityData = useMemo(() => {
+    // Генерируем данные об активности на основе логов или примерные данные
+    const last7Days = Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return {
+        day: d.toLocaleDateString('ru', { weekday: 'short' }),
+        tasks: Math.floor(Math.random() * 5) + 1, // Пример динамики задач
+        xp: Math.floor(Math.random() * 500) + 100
+      };
+    });
+    return last7Days;
+  }, []);
+
+  const totalCompleted = useMemo(() => {
+    return goals.reduce((acc, g) => acc + (g.status === 'completed' ? 1 : 0), 0);
+  }, [goals]);
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
        <header className="px-2">
-          <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">Анализ</h2>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Твой Икигай и баланс жизни</p>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Анализ</h2>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Твой прогресс и эффективность</p>
        </header>
 
+       {/* Activity Dynamics */}
+       <div className="bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm space-y-6">
+          <div className="flex justify-between items-center">
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Динамика активностей</span>
+             <span className="text-[9px] font-black text-indigo-500 uppercase">Последняя неделя</span>
+          </div>
+          <div className="w-full h-48">
+             <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={activityData}>
+                   <Bar dataKey="tasks" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 800, fill: '#94a3b8'}} />
+                </BarChart>
+             </ResponsiveContainer>
+          </div>
+          <div className="flex justify-around pt-2 border-t border-slate-50">
+             <div className="text-center">
+                <span className="text-xl font-black text-slate-900 italic">{totalCompleted}</span>
+                <p className="text-[7px] font-black text-slate-400 uppercase">Выполнено целей</p>
+             </div>
+             <div className="text-center">
+                <span className="text-xl font-black text-indigo-600 italic">~{Math.round(activityData.reduce((a,b) => a + b.tasks, 0) / 7)}</span>
+                <p className="text-[7px] font-black text-slate-400 uppercase">Задач в день</p>
+             </div>
+          </div>
+       </div>
+
        <div className="bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col items-center">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Жизненный баланс</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Жизненный баланс (Икигай)</span>
           <div className="w-full h-64">
              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -47,10 +92,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ goals, partners, i
              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
                 <i className="fa-solid fa-brain"></i>
              </div>
-             <h4 className="text-[10px] font-black uppercase tracking-widest">ИИ Оценка достижений</h4>
+             <h4 className="text-[10px] font-black uppercase tracking-widest italic">AI Инсайт</h4>
           </div>
           <p className="text-sm text-slate-400 leading-relaxed font-medium italic">
-            "У тебя отличный фокус на финансах, но социальный сектор проседает. Твое Племя (Social) может дать больше энергии, если ты откроешь для них 2-3 цели для верификации."
+            "Твоя активность на пике в середине недели. Попробуй перенести самые сложные финансовые задачи на среду — в этот день твоя продуктивность выше на 24%."
           </p>
        </div>
 
@@ -60,7 +105,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ goals, partners, i
              {goals.map(goal => (
                <div key={goal.id} className="p-5 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm flex justify-between items-center">
                   <div>
-                     <h4 className="font-bold text-slate-800 text-sm leading-tight">{goal.title}</h4>
+                     <h4 className="font-bold text-slate-800 text-sm leading-tight italic uppercase">{goal.title}</h4>
                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{goal.is_private ? 'Личная' : 'Видна племени'}</span>
                   </div>
                   <button onClick={() => onTogglePrivacy(goal.id)} className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors ${goal.is_private ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600'}`}>
