@@ -1,9 +1,9 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const geminiService = {
   async validateGoal(value: string, goalTitle: string, goalMetric: string) {
     try {
-      // Ключ будет подставлен Vite из process.env.API_KEY во время сборки
       const apiKey = process.env.API_KEY;
       if (!apiKey) throw new Error("API Key is missing");
 
@@ -39,7 +39,10 @@ export const geminiService = {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Разложи цель "${goalTitle}" (${category}, ${metric}: ${target}) на шаги. Для каждого шага укажи реалистичную длительность в днях. Верни JSON структуру с subGoals и projects.`,
+        contents: `Разложи цель "${goalTitle}" (${category}, ${metric}: ${target}) на конкретные шаги с расписанием. 
+        Если это финансовая цель, рассчитай, сколько нужно откладывать (auto_calculate_amount).
+        Определи частоту выполнения: daily, weekly, monthly. 
+        Верни JSON структуру с subGoals и projects.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -54,9 +57,10 @@ export const geminiService = {
                     metric: { type: Type.STRING },
                     target_value: { type: Type.NUMBER },
                     weight: { type: Type.NUMBER },
-                    estimated_days: { type: Type.NUMBER }
+                    frequency: { type: Type.STRING, description: "daily, weekly, monthly, once" },
+                    auto_calculate_amount: { type: Type.NUMBER, description: "Calculated saving amount if finance goal" }
                   },
-                  required: ["title", "metric", "target_value", "weight", "estimated_days"]
+                  required: ["title", "metric", "target_value", "weight", "frequency"]
                 }
               },
               projects: {
@@ -81,7 +85,7 @@ export const geminiService = {
     } catch (error) {
       console.error("Gemini API Error:", error);
       return {
-        subGoals: [{ title: "Сделать первый шаг", metric: metric, target_value: target, weight: 100, estimated_days: 30 }],
+        subGoals: [{ title: "Сделать первый шаг", metric: metric, target_value: target, weight: 100, frequency: "once" }],
         projects: [{ title: "Подготовительный этап", estimated_effort_hours: 5, complexity: 1 }],
         suggestedHabits: ["Ежедневный прогресс"]
       };

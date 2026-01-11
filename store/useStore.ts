@@ -1,9 +1,9 @@
+
 import { useState, useEffect } from 'react';
-import { User, Value, YearGoal, Action, AppView, ProgressLog, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project } from '../types';
-import { geminiService } from '../services/gemini';
+import { User, Value, YearGoal, AppView, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project } from '../types';
 
 const INITIAL_USER: User = {
-  id: 'user-1',
+  id: 'user-' + Math.random().toString(36).substr(2, 9),
   name: 'Лидер',
   xp: 0,
   level: 1,
@@ -40,6 +40,20 @@ export function useStore() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Telegram Integration
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.initDataUnsafe?.user) {
+      const u = tg.initDataUnsafe.user;
+      setUser(prev => ({
+        ...prev,
+        telegram_id: String(u.id),
+        name: u.first_name + (u.last_name ? ' ' + u.last_name : ''),
+        photo_url: u.photo_url
+      }));
+    }
+  }, []);
 
   useEffect(() => {
     const saved = {
@@ -119,48 +133,53 @@ export function useStore() {
 
   const startDemo = () => {
     const g1Id = crypto.randomUUID();
-    const l1Id = crypto.randomUUID();
+    const g2Id = crypto.randomUUID();
     
     setGoals([
       {
-        id: g1Id, category: 'finance', value_id: 'v1', title: 'Финансовая подушка', metric: '₽', 
-        target_value: 500000, current_value: 120000, start_date: new Date().toISOString(), 
-        end_date: new Date(Date.now() + 31536000000).toISOString(), status: 'active', confidence_level: 70, 
-        logs: [
-          { id: l1Id, goal_id: g1Id, timestamp: new Date(Date.now() - 86400000).toISOString(), value: 50000, confidence: 95, is_verified: false }
-        ]
+        id: g1Id, category: 'finance', value_id: 'v1', title: 'Купить велосипед (Carbon Road)', metric: '₽', 
+        target_value: 250000, current_value: 45000, start_date: new Date().toISOString(), 
+        end_date: new Date(Date.now() + 180 * 86400000).toISOString(), status: 'active', confidence_level: 85, 
+        logs: []
+      },
+      {
+        id: g2Id, category: 'sport', value_id: 'v2', title: 'Пробежать 10км', metric: 'км', 
+        target_value: 10, current_value: 2, start_date: new Date().toISOString(), 
+        end_date: new Date(Date.now() + 60 * 86400000).toISOString(), status: 'active', confidence_level: 60, 
+        logs: []
       }
+    ]);
+
+    setSubgoals([
+      { id: 'sg1', year_goal_id: g1Id, title: 'Откладывать на байк', metric: '₽', target_value: 250000, current_value: 45000, weight: 100, deadline: new Date().toISOString(), frequency: 'monthly', auto_calculate_amount: 35000 },
+      { id: 'sg2', year_goal_id: g2Id, title: 'Утренняя пробежка', metric: 'раз', target_value: 24, current_value: 3, weight: 100, deadline: new Date().toISOString(), frequency: 'daily' }
     ]);
     
     setDebts([
-      { id: 'd1', title: 'Кредит на авто', total_amount: 1200000, remaining_amount: 850000, interest_rate: 12.5 }
+      { id: 'd1', title: 'Рассрочка за iPhone', total_amount: 120000, remaining_amount: 45000, interest_rate: 0 }
     ]);
     
     setSubscriptions([
-      { id: 's1', title: 'Netflix', amount: 999, period: 'monthly', category: 'Развлечения' },
-      { id: 's2', title: 'Gym Membership', amount: 3500, period: 'monthly', category: 'Здоровье' }
+      { id: 's1', title: 'Telegram Premium', amount: 299, period: 'monthly', category: 'Софт' },
+      { id: 's2', title: 'Яндекс Плюс', amount: 299, period: 'monthly', category: 'Медиа' }
     ]);
 
-    const demoTxs: Transaction[] = [
-      { id: 't1', amount: 120000, type: 'income', category: 'Зарплата', timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), note: 'Основная работа' },
-      { id: 't2', amount: 4500, type: 'expense', category: 'Продукты', timestamp: new Date(Date.now() - 86400000).toISOString() },
-      { id: 't3', amount: 1200, type: 'expense', category: 'Транспорт', timestamp: new Date().toISOString() },
-      { id: 't4', amount: 15000, type: 'income', category: 'Инвестиции', timestamp: new Date(Date.now() - 86400000 * 5).toISOString() },
-      { id: 't5', amount: 35000, type: 'expense', category: 'Жилье', timestamp: new Date(Date.now() - 86400000 * 10).toISOString() },
-    ];
-    setTransactions(demoTxs);
+    setTransactions([
+      { id: 't1', amount: 150000, type: 'income', category: 'Зарплата', timestamp: new Date(Date.now() - 86400000 * 2).toISOString() },
+      { id: 't2', amount: 35000, type: 'expense', category: 'Накопления', timestamp: new Date(Date.now() - 86400000).toISOString(), note: 'На велосипед' }
+    ]);
 
     setUser({ 
       ...INITIAL_USER, 
       is_demo: true, 
-      xp: 5200, 
-      level: 5, 
-      streak: 15,
+      xp: 1200, 
+      level: 2, 
+      streak: 5,
       financials: {
-        total_assets: 1450000,
-        total_debts: 850000,
-        monthly_income: 185000,
-        monthly_expenses: 92000,
+        total_assets: 455000,
+        total_debts: 45000,
+        monthly_income: 150000,
+        monthly_expenses: 85000,
         currency: '₽'
       }
     });
@@ -187,32 +206,28 @@ export function useStore() {
     awardXP(500);
   };
 
-  const addPartnerReview = (review: Omit<PartnerReview, 'id' | 'timestamp'>) => {
-    const newReview = { ...review, id: crypto.randomUUID(), timestamp: new Date().toISOString() };
-    setReviews(prev => [...prev, newReview]);
-    
-    setGoals(prev => prev.map(g => {
-       const logIndex = g.logs.findIndex(l => l.id === review.log_id);
-       if (logIndex !== -1) {
-          const updatedLogs = [...g.logs];
-          updatedLogs[logIndex] = { ...updatedLogs[logIndex], is_verified: review.is_verified };
-          const confidenceShift = review.is_verified ? (review.rating >= 4 ? 5 : 2) : -15;
-          return { 
-             ...g, 
-             logs: updatedLogs, 
-             confidence_level: Math.min(100, Math.max(0, g.confidence_level + confidenceShift))
-          };
-       }
-       return g;
+  const updateSubgoalProgress = (sgId: string, value: number) => {
+    setSubgoals(prev => prev.map(sg => {
+      if (sg.id === sgId) {
+        const newValue = sg.current_value + value;
+        // Update main goal too
+        setGoals(gPrev => gPrev.map(g => {
+          if (g.id === sg.year_goal_id) {
+            const addedVal = (value / sg.target_value) * g.target_value * (sg.weight / 100);
+            return { ...g, current_value: Math.min(g.target_value, g.current_value + addedVal) };
+          }
+          return g;
+        }));
+        return { ...sg, current_value: Math.min(sg.target_value, newValue) };
+      }
+      return sg;
     }));
-
-    if (review.is_verified) awardXP(300);
+    awardXP(100);
   };
 
   return {
     user, setUser, view, setView, values, goals, addGoalWithPlan, partners, reviews, 
-    addPartnerReview, loading, startDemo, startFresh, debts, subscriptions, transactions, addTransaction,
-    subgoals, projects,
-    refreshSocialInsight: async () => {}
+    loading, startDemo, startFresh, debts, subscriptions, transactions, addTransaction,
+    subgoals, projects, updateSubgoalProgress
   };
 }

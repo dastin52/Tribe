@@ -20,6 +20,8 @@ export interface Transaction {
   timestamp: string;
 }
 
+export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'quarterly';
+
 export interface Action {
   id: string;
   title: string;
@@ -36,7 +38,9 @@ export interface SubGoal {
   current_value: number;
   weight: number;
   deadline: string;
+  frequency: TaskFrequency;
   estimated_days?: number;
+  auto_calculate_amount?: number; // Для финансовых целей: сколько откладывать
 }
 
 export interface Project {
@@ -76,7 +80,9 @@ export interface FinancialSnapshot {
 
 export interface User {
   id: string;
+  telegram_id?: string;
   name: string;
+  photo_url?: string;
   xp: number;
   level: number;
   streak: number;
@@ -110,16 +116,11 @@ export interface PartnerReview {
 export interface ProgressLog {
   id: string;
   goal_id: string;
+  subgoal_id?: string;
   timestamp: string;
   value: number;
   confidence: number;
   is_verified?: boolean;
-  metadata?: {
-    income?: number;
-    expense?: number;
-    savings?: number;
-    type?: 'income' | 'expense' | 'debt_payment';
-  };
 }
 
 export interface YearGoal {

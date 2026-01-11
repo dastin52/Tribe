@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // Используем API_KEY_tribe, который виден на скриншоте пользователя
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY_tribe || process.env.API_KEY || "")
   },
   build: {
