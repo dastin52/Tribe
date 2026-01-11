@@ -22,7 +22,6 @@ const App: React.FC = () => {
   const netWorth = financials.total_assets - financials.total_debts;
 
   const balanceHistory = useMemo(() => {
-    // Создаем более наглядную историю для графиков
     const base = netWorth;
     return Array.from({length: 10}).map((_, i) => ({
       date: i,
@@ -101,7 +100,16 @@ const App: React.FC = () => {
         />
       )}
       {store.view === AppView.GOALS && <GoalsView goals={store.goals} onAddGoal={() => setShowWizard(true)} onSelectGoal={setSelectedGoal} />}
-      {store.view === AppView.ANALYTICS && <AnalyticsView goals={store.goals} partners={store.partners} ikigaiData={ikigaiData} onTogglePrivacy={store.toggleGoalPrivacy} />}
+      {store.view === AppView.ANALYTICS && (
+        <AnalyticsView 
+          goals={store.goals} 
+          partners={store.partners} 
+          ikigaiData={ikigaiData} 
+          onTogglePrivacy={store.toggleGoalPrivacy}
+          transactions={store.transactions}
+          currency={financials.currency}
+        />
+      )}
       {store.view === AppView.SOCIAL && <SocialView partners={store.partners} goals={store.goals} onVerify={store.verifyProgress} onAddPartner={store.addPartner} />}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
       {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}

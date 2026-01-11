@@ -63,6 +63,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     return (totalExpenses / 6) + subsTotal;
   }, [transactions, subscriptions, financials.monthly_expenses]);
 
+  // Расчет показателей за текущий месяц
+  const currentMonthStats = useMemo(() => {
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+    
+    const filtered = transactions.filter(t => {
+      const d = new Date(t.timestamp);
+      return d.getMonth() === curMonth && d.getFullYear() === curYear;
+    });
+    
+    const income = filtered.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
+    const expense = filtered.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
+    
+    return { income, expense };
+  }, [transactions]);
+
   const handleGetAdvice = async () => {
     setLoadingAdvice(true);
     const advice = await geminiService.getFinanceAdvice(transactions, goals);
@@ -161,6 +178,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </ResponsiveContainer>
                </div>
             </div>
+
+            {/* Сводка за месяц */}
+            <div className="grid grid-cols-2 gap-3 mx-1">
+               <div className="p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 italic">Доход / Месяц</span>
+                  <span className="font-black text-emerald-600 text-sm italic">{formatVal(currentMonthStats.income)}</span>
+               </div>
+               <div className="p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 italic">Расход / Месяц</span>
+                  <span className="font-black text-rose-600 text-sm italic">{formatVal(currentMonthStats.expense)}</span>
+               </div>
+            </div>
+
             {/* Список транзакций */}
             <div className="space-y-3">
               {transactions.slice(-10).reverse().map(tx => (
@@ -201,8 +231,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </div>
                     
                     <div className="p-6 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-sm">
-                       <span className="text-[9px] font-black text-slate-400 uppercase block mb-2 italic tracking-widest">Капитал для пассивного дохода</span>
-                       <span className="text-2xl font-black">{formatVal(passiveCapitalGoal)}</span>
+                       <span className="text-[9px] font-black text-slate-400 uppercase block mb-1 italic tracking-widest">Капитал для пассивного дохода</span>
+                       <span className="text-2xl font-black block">{formatVal(passiveCapitalGoal)}</span>
+                       <span className="text-[7px] font-black text-indigo-400/60 uppercase italic tracking-wider">
+                          Базис: {formatVal(averageMonthlyBurn)} / мес
+                       </span>
                     </div>
 
                     {showFormulaInfo === 'passive' && (
