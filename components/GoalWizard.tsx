@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Value, YearGoal, SubGoal, Project, GoalCategory, GoalStatus, TaskFrequency } from '../types';
+import { Value, YearGoal, SubGoal, Project, GoalCategory, GoalStatus } from '../types';
 import { geminiService } from '../services/gemini';
 
 interface GoalWizardProps {
@@ -12,277 +12,262 @@ interface GoalWizardProps {
 export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCancel }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   
-  const [goalData, setGoalData] = useState<Partial<YearGoal>>({
-    title: '',
-    description: '',
-    metric: '₽',
-    category: 'finance',
-    target_value: 0,
-    value_id: values[0]?.id || 'v_gen',
-    status: 'active' as GoalStatus,
-    confidence_level: 50
-  });
+  // Goal Data
+  const [category, setCategory] = useState<GoalCategory>('growth');
+  const [title, setTitle] = useState('');
+  const [motivation, setMotivation] = useState('');
+  const [metric, setMetric] = useState('');
+  const [target, setTarget] = useState<number>(0);
+  const [deadline, setDeadline] = useState('');
+  const [description, setDescription] = useState('');
 
-  const categories: {id: GoalCategory, label: string, icon: string, metrics: string[], hint: string}[] = [
-    {id: 'finance', label: 'Капитал', icon: 'fa-wallet', metrics: ['₽', '$', '%'], hint: 'Покупки, накопления'},
-    {id: 'sport', label: 'Тело', icon: 'fa-dumbbell', metrics: ['км', 'тренировки', 'кг', 'раз'], hint: 'Здоровье, энергия'},
-    {id: 'growth', label: 'Мозг', icon: 'fa-book-open', metrics: ['часы', 'книги', 'уроки', 'баллы'], hint: 'Навыки, обучение'},
-    {id: 'work', label: 'Дело', icon: 'fa-briefcase', metrics: ['проекты', 'часы', 'сделки'], hint: 'Проекты, доходы'},
-    {id: 'other', label: 'Другое', icon: 'fa-mountain-sun', metrics: ['раз', 'дни'], hint: 'Личное'},
+  // AI State
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiInsight, setAiInsight] = useState('');
+  const [decomposition, setDecomposition] = useState<any>(null);
+
+  const categories: {id: GoalCategory, label: string, icon: string, color: string}[] = [
+    {id: 'finance', label: 'Капитал', icon: 'fa-wallet', color: 'text-emerald-600'},
+    {id: 'sport', label: 'Тело', icon: 'fa-dumbbell', color: 'text-rose-600'},
+    {id: 'growth', label: 'Развитие', icon: 'fa-brain', color: 'text-indigo-600'},
+    {id: 'work', label: 'Работа', icon: 'fa-briefcase', color: 'text-amber-600'},
+    {id: 'other', label: 'Другое', icon: 'fa-star', color: 'text-slate-600'},
   ];
 
-  const currentCategory = categories.find(c => c.id === goalData.category);
-
-  useEffect(() => {
-    if (currentCategory && !currentCategory.metrics.includes(goalData.metric!)) {
-      setGoalData(prev => ({ ...prev, metric: currentCategory.metrics[0] }));
-    }
-  }, [goalData.category]);
-
-  const [aiFeedback, setAiFeedback] = useState<string>('');
-  const [decomposition, setDecomposition] = useState<any>(null);
-  const [suggestedDeadline, setSuggestedDeadline] = useState<string>('');
-
   const handleNext = async () => {
-    setError('');
     if (step === 1) {
-      if (!goalData.title || !goalData.metric || !goalData.target_value) {
-        setError('Укажи цель, метрику и объем');
-        return;
-      }
+      if (!title) return;
       setLoading(true);
-      try {
-        const val = values.find(v => v.id === goalData.value_id);
-        const result = await geminiService.validateGoal(val?.title || 'Общее развитие', goalData.title!, goalData.metric!);
-        
-        if (result.isValid === false && result.feedback) {
-          setError(`ИИ: ${result.feedback}`);
-          setLoading(false);
-          return;
-        }
-        
-        const date = new Date();
-        const months = result.suggestedDeadlineMonths || 12;
-        date.setMonth(date.getMonth() + months);
-        setSuggestedDeadline(date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }));
-        
-        setAiFeedback(result.feedback || 'Цель выглядит амбициозно. Давай составим план действий.');
-        setStep(2);
-      } catch (e) {
-        setStep(2); 
-      } finally {
-        setLoading(false);
-      }
+      const res = await geminiService.getCoachingInsight(category, title);
+      setAiQuestion(res.question);
+      setStep(2);
+      setLoading(false);
     } else if (step === 2) {
+      if (!motivation) return;
       setLoading(true);
-      try {
-        const decomp = await geminiService.decomposeGoal(goalData.title!, goalData.metric!, goalData.target_value!, goalData.category!);
-        setDecomposition(decomp);
-        setStep(3);
-      } catch (e) {
-        setError('Ошибка декомпозиции плана');
-      } finally {
-        setLoading(false);
-      }
+      const res = await geminiService.getCoachingInsight(category, title, motivation);
+      setAiInsight(res.insight);
+      
+      // Auto-suggest deadline
+      const d = new Date();
+      d.setMonth(d.getMonth() + (res.suggestedMonths || 6));
+      setDeadline(d.toISOString().split('T')[0]);
+      
+      setStep(3);
+      setLoading(false);
+    } else if (step === 3) {
+      setLoading(true);
+      const res = await geminiService.decomposeGoal(title, metric, target, category, description);
+      setDecomposition(res);
+      setStep(4);
+      setLoading(false);
     }
   };
 
   const handleFinish = () => {
     const goalId = crypto.randomUUID();
-    const finalGoal: YearGoal = {
+    const goal: YearGoal = {
       id: goalId,
-      category: goalData.category as GoalCategory || 'finance',
-      value_id: goalData.value_id || 'v_gen',
-      title: goalData.title || '',
-      description: goalData.description || '',
-      metric: goalData.metric || '₽',
-      target_value: goalData.target_value || 0,
+      category,
+      value_id: values[0]?.id || 'v1',
+      title,
+      description: `${description}\n\nМотивация: ${motivation}\nПометка ИИ: ${aiInsight}`,
+      metric: metric || 'ед.',
+      target_value: target,
       current_value: 0,
       start_date: new Date().toISOString(),
-      end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-      status: 'active' as GoalStatus,
-      confidence_level: goalData.confidence_level || 50,
+      end_date: new Date(deadline).toISOString(),
+      status: 'active',
+      confidence_level: 80,
       logs: []
     };
 
-    const finalSubGoals: SubGoal[] = (decomposition?.subGoals || []).map((s: any) => ({
-      ...s,
+    const sgs: SubGoal[] = (decomposition?.subGoals || []).map((s: any) => ({
       id: crypto.randomUUID(),
       year_goal_id: goalId,
+      title: s.title,
+      metric: metric || 'ед.',
+      target_value: s.target_value,
       current_value: 0,
-      deadline: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
-      frequency: (s.frequency || 'monthly') as TaskFrequency,
-      auto_calculate_amount: s.auto_calculate_amount
+      weight: s.weight,
+      deadline: goal.end_date,
+      frequency: 'monthly'
     }));
 
-    const finalProjects: Project[] = (decomposition?.projects || []).map((p: any) => ({
-      ...p,
-      id: crypto.randomUUID(),
-      subgoal_id: finalSubGoals[0]?.id || '',
-      owner_id: 'user-1',
-      status: 'planned'
-    }));
-
-    onComplete(finalGoal, finalSubGoals, finalProjects);
+    onComplete(goal, sgs, []);
   };
 
   return (
-    <div className="fixed inset-0 bg-white z-[110] flex flex-col animate-fade-in">
-      <header className="p-6 border-b flex justify-between items-center bg-white">
-        <button onClick={onCancel} className="text-slate-400 w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center active:scale-90"><i className="fa-solid fa-xmark"></i></button>
-        <span className="font-black text-[10px] uppercase tracking-[0.4em] text-slate-300">Шаг {step} из 3</span>
+    <div className="fixed inset-0 bg-white z-[150] flex flex-col animate-fade-in">
+      <header className="p-6 border-b border-slate-50 flex justify-between items-center sticky top-0 bg-white z-10">
+        <button onClick={onCancel} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 active:scale-90"><i className="fa-solid fa-chevron-left"></i></button>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className={`h-1 rounded-full transition-all ${step >= i ? 'w-6 bg-slate-900' : 'w-2 bg-slate-100'}`}></div>
+          ))}
+        </div>
         <div className="w-10"></div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar pb-32">
+      <div className="flex-1 overflow-y-auto p-8 space-y-10 pb-32 custom-scrollbar">
         {step === 1 && (
-          <div className="space-y-8">
-            <div>
-               <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Новая цель</h2>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Выбери категорию и параметры</p>
+          <div className="space-y-8 animate-scale-up">
+            <div className="space-y-2">
+              <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Идея</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Что ты хочешь достичь?</p>
             </div>
-            
-            <div className="grid grid-cols-2 gap-3">
+
+            <div className="grid grid-cols-5 gap-2">
               {categories.map(cat => (
                 <button 
-                  key={cat.id}
-                  onClick={() => setGoalData({...goalData, category: cat.id})}
-                  className={`p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center gap-2 text-center ${
-                    goalData.category === cat.id ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-lg' : 'border-slate-50 bg-slate-50 text-slate-300'
-                  }`}
+                  key={cat.id} 
+                  onClick={() => setCategory(cat.id)}
+                  className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${category === cat.id ? 'border-slate-900 bg-slate-50 shadow-sm' : 'border-slate-50 opacity-40'}`}
                 >
-                  <i className={`fa-solid ${cat.icon} text-2xl`}></i>
-                  <span className="text-[10px] font-black uppercase tracking-widest">{cat.label}</span>
+                  <i className={`fa-solid ${cat.icon} text-lg ${category === cat.id ? cat.color : ''}`}></i>
+                  <span className="text-[8px] font-black uppercase tracking-tighter">{cat.label}</span>
                 </button>
               ))}
             </div>
 
-            <div className="space-y-6 pt-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Что нужно достичь?</label>
-                <input 
-                  type="text" 
-                  placeholder="Например: Сдать IELTS на 7.5"
-                  className="w-full p-5 bg-slate-50 rounded-[2rem] border-none ring-2 ring-slate-100 focus:ring-indigo-500 transition-all outline-none font-bold text-slate-800 shadow-sm"
-                  value={goalData.title}
-                  onChange={e => setGoalData({...goalData, title: e.target.value})}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Объем цели (число)</label>
-                  <input 
-                    type="number" 
-                    placeholder="100"
-                    className="w-full p-5 bg-slate-50 rounded-[2rem] border-none ring-2 ring-slate-100 focus:ring-indigo-500 transition-all outline-none font-black text-slate-900 text-3xl text-center"
-                    value={goalData.target_value || ''}
-                    onChange={e => setGoalData({...goalData, target_value: Number(e.target.value)})}
-                  />
-                </div>
-                
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Метрика измерения</label>
-                  <div className="flex flex-wrap gap-2">
-                     {currentCategory?.metrics.map(m => (
-                       <button 
-                         key={m}
-                         onClick={() => setGoalData({...goalData, metric: m})}
-                         className={`px-6 py-3 rounded-2xl font-black text-xs transition-all border ${goalData.metric === m ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-slate-50 text-slate-400 border-slate-100'}`}
-                       >
-                         {m}
-                       </button>
-                     ))}
-                     <input 
-                       type="text"
-                       placeholder="Своя..."
-                       className="px-6 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black outline-none w-28 focus:ring-2 focus:ring-indigo-500"
-                       value={currentCategory?.metrics.includes(goalData.metric!) ? '' : goalData.metric}
-                       onChange={e => setGoalData({...goalData, metric: e.target.value})}
-                     />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <input 
+              type="text" 
+              placeholder="Название цели..." 
+              className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2.5rem] font-black text-xl text-slate-900 outline-none focus:border-slate-900 transition-all"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              autoFocus
+            />
           </div>
         )}
 
         {step === 2 && (
-          <div className="space-y-8 animate-fade-in text-center">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Вердикт ИИ</h2>
-            <div className="bg-slate-900 text-white p-10 rounded-[3.5rem] relative overflow-hidden shadow-2xl min-h-[200px] flex items-center">
-               <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-[70px]"></div>
-               <div className="z-10 relative">
-                  <p className="text-lg leading-relaxed text-indigo-100 font-bold italic">"{aiFeedback}"</p>
-               </div>
+          <div className="space-y-8 animate-scale-up">
+            <div className="space-y-2">
+              <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Смысл</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Вопрос от твоего Племени</p>
             </div>
-            
-            <div className="p-10 bg-indigo-50 rounded-[3.5rem] border border-indigo-100 flex flex-col items-center gap-2">
-               <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Прогноз финиша</span>
-               <span className="text-3xl font-black text-indigo-600 tracking-tighter italic uppercase">{suggestedDeadline}</span>
+
+            <div className="p-8 bg-slate-900 rounded-[3rem] text-white relative overflow-hidden shadow-2xl italic">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
+               <p className="text-lg font-bold leading-relaxed relative z-10">"{aiQuestion}"</p>
             </div>
+
+            <textarea 
+              placeholder="Твой честный ответ..." 
+              className="w-full p-8 bg-slate-50 rounded-[3rem] font-bold text-slate-700 outline-none border-2 border-transparent focus:border-slate-200 transition-all min-h-[150px] text-lg"
+              value={motivation}
+              onChange={e => setMotivation(e.target.value)}
+              autoFocus
+            />
           </div>
         )}
 
         {step === 3 && (
-          <div className="space-y-8 animate-fade-in">
-            <div>
-               <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">План роста</h2>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">ИИ разложил твою цель на шаги</p>
+          <div className="space-y-8 animate-scale-up">
+            <div className="space-y-2">
+              <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Детали</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Цифры и сроки</p>
             </div>
-            
-            <section className="space-y-4">
-              {decomposition?.subGoals?.map((sg: any, i: number) => (
-                <div key={i} className="p-6 bg-white rounded-[2.5rem] border border-slate-100 flex justify-between items-center shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xl">
-                      {i + 1}
-                    </div>
-                    <div>
-                      <span className="text-sm font-black text-slate-800 block leading-tight">{sg.title}</span>
-                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{sg.target_value} {sg.metric} • {sg.frequency}</span>
-                    </div>
-                  </div>
-                  <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
-                     <div className="h-full bg-indigo-500" style={{ width: `${sg.weight}%` }}></div>
-                  </div>
-                </div>
-              ))}
-            </section>
 
-            {decomposition?.suggestedHabits && (
-              <div className="space-y-3 pt-4">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Рекомендуемые привычки</h4>
-                 <div className="flex flex-wrap gap-2">
-                    {decomposition.suggestedHabits.map((h: string, i: number) => (
-                      <span key={i} className="px-5 py-2.5 bg-slate-900 text-white text-[9px] font-black uppercase rounded-full tracking-widest shadow-lg shadow-slate-200">{h}</span>
-                    ))}
-                 </div>
+            <div className="p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 italic">
+               <p className="text-xs text-indigo-900 font-bold leading-relaxed">ИИ: "{aiInsight}"</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Объем</label>
+                <input 
+                  type="number" 
+                  className="w-full p-6 bg-slate-50 rounded-[2rem] font-black text-2xl text-center outline-none"
+                  value={target || ''}
+                  onChange={e => setTarget(Number(e.target.value))}
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Метрика</label>
+                <input 
+                  type="text" 
+                  placeholder="кг, %, ₽..."
+                  className="w-full p-6 bg-slate-50 rounded-[2rem] font-black text-2xl text-center outline-none"
+                  value={metric}
+                  onChange={e => setMetric(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Дедлайн</label>
+              <input 
+                type="date" 
+                className="w-full p-6 bg-slate-50 rounded-[2rem] font-black text-xl text-center outline-none"
+                value={deadline}
+                onChange={e => setDeadline(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4">Описание (по желанию)</label>
+              <textarea 
+                className="w-full p-6 bg-slate-50 rounded-[2rem] font-bold text-slate-600 outline-none min-h-[100px]"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+              />
+            </div>
           </div>
         )}
 
-        {error && (
-          <div className="p-6 bg-rose-50 text-rose-600 rounded-[2rem] text-xs font-bold border border-rose-100 flex items-center gap-3 animate-scale-up shadow-sm">
-            <i className="fa-solid fa-triangle-exclamation text-lg"></i>
-            <span>{error}</span>
+        {step === 4 && (
+          <div className="space-y-8 animate-scale-up">
+            <div className="space-y-2 text-center">
+              <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">План</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Контрольные точки</p>
+            </div>
+
+            <div className="space-y-3">
+              {decomposition?.subGoals?.map((s: any, i: number) => (
+                <div key={i} className="p-6 bg-white border-2 border-slate-50 rounded-[2.5rem] flex items-center justify-between">
+                   <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black">{i+1}</div>
+                      <div>
+                         <h4 className="text-sm font-black text-slate-800 leading-tight">{s.title}</h4>
+                         <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">{s.target_value} {metric}</span>
+                      </div>
+                   </div>
+                   <span className="text-[10px] font-black text-slate-300">{s.weight}%</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      <footer className="p-8 border-t bg-white/90 backdrop-blur-md sticky bottom-0 z-20">
+      <footer className="p-8 border-t border-slate-50 bg-white/90 backdrop-blur-md sticky bottom-0 z-20 flex gap-3">
+        {step > 1 && (
+          <button 
+            disabled={loading}
+            onClick={() => setStep(prev => prev - 1)}
+            className="w-1/4 h-20 bg-slate-50 text-slate-400 font-black rounded-[2rem] active:scale-95 transition-all"
+          >
+            <i className="fa-solid fa-arrow-left"></i>
+          </button>
+        )}
         <button 
           disabled={loading}
-          onClick={step === 3 ? handleFinish : handleNext}
-          className="w-full bg-slate-900 text-white font-black py-7 rounded-[2.5rem] shadow-2xl shadow-indigo-100 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+          onClick={step === 4 ? handleFinish : handleNext}
+          className="flex-1 h-20 bg-slate-900 text-white font-black rounded-[2rem] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
         >
-          {loading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-bolt-lightning text-amber-400"></i>}
-          <span className="uppercase tracking-[0.2em] text-sm">
-            {step === 3 ? 'Активировать систему' : 'Далее'}
-          </span>
+          {loading ? (
+            <i className="fa-solid fa-circle-notch fa-spin"></i>
+          ) : (
+            <>
+              <i className="fa-solid fa-bolt text-amber-400"></i>
+              <span className="uppercase tracking-[0.2em] text-xs">
+                {step === 4 ? 'Запустить цель' : 'Далее'}
+              </span>
+            </>
+          )}
         </button>
       </footer>
     </div>
