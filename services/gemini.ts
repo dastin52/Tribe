@@ -3,7 +3,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 export const geminiService = {
   async validateGoal(value: string, goalTitle: string, goalMetric: string) {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+      // Ключ будет подставлен Vite из process.env.API_KEY во время сборки
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) throw new Error("API Key is missing");
+
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Проверь цель на соответствие ценности "${value}". Цель: "${goalTitle}", Метрика: "${goalMetric}". Оцени реалистичность и дай краткий совет. Ответь в формате JSON: { "isValid": boolean, "feedback": string, "suggestedDeadlineMonths": number }`,
@@ -29,7 +33,10 @@ export const geminiService = {
 
   async decomposeGoal(goalTitle: string, metric: string, target: number, category: string) {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) throw new Error("API Key is missing");
+
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Разложи цель "${goalTitle}" (${category}, ${metric}: ${target}) на шаги. Для каждого шага укажи реалистичную длительность в днях. Верни JSON структуру с subGoals и projects.`,
