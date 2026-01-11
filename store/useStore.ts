@@ -151,6 +151,18 @@ export function useStore() {
     awardXP(50);
   };
 
+  const updateUserInfo = (data: Partial<User>) => {
+    setUser(prev => ({ ...prev, ...data }));
+    if (data.financials) {
+       setUser(prev => ({ ...prev, financials: { ...prev.financials!, ...data.financials } }));
+    }
+  };
+
+  const resetData = () => {
+    localStorage.clear();
+    window.location.reload();
+  };
+
   const startDemo = () => {
     const g1Id = crypto.randomUUID();
     const g2Id = crypto.randomUUID();
@@ -259,6 +271,6 @@ export function useStore() {
     user, setUser, view, setView, values, goals, addGoalWithPlan, partners, reviews, 
     loading, startDemo, startFresh, debts, subscriptions, transactions, meetings,
     subgoals, projects, updateSubgoalProgress, toggleGoalPrivacy, addTransaction,
-    addDebt, addSubscription
+    addDebt, addSubscription, updateUserInfo, resetData
   };
 }

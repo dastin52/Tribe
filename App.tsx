@@ -9,6 +9,7 @@ import { FinanceView } from './components/FinanceView';
 import { GoalsView } from './components/GoalsView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SocialView } from './components/SocialView';
+import { SettingsView } from './components/SettingsView';
 
 declare global {
   interface Window {
@@ -170,6 +171,14 @@ const App: React.FC = () => {
       )}
 
       {store.view === AppView.SOCIAL && <SocialView partners={store.partners} />}
+
+      {store.view === AppView.SETTINGS && (
+        <SettingsView 
+          user={store.user} 
+          onUpdate={store.updateUserInfo} 
+          onReset={store.resetData} 
+        />
+      )}
 
       {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g, s, p) => { store.addGoalWithPlan(g, s, p); setShowWizard(false); }} />}
 
