@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Transaction, Debt, Subscription, FinancialSnapshot, DebtCategory, DebtDirection } from '../types';
 
@@ -16,7 +16,7 @@ interface FinanceViewProps {
   onAddSubscription: (sub: Omit<Subscription, 'id'>) => void;
 }
 
-type FinanceTab = 'operations' | 'debts' | 'subscriptions';
+type FinanceTab = 'operations' | 'debts' | 'subscriptions' | 'planning';
 
 export const FinanceView: React.FC<FinanceViewProps> = ({ 
   financials, transactions, debts, subscriptions, balanceVisible, netWorth, balanceHistory, onAddTransaction, onAddDebt, onAddSubscription
@@ -39,6 +39,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [subTitle, setSubTitle] = useState('');
   const [subAmount, setSubAmount] = useState('');
   const [subDate, setSubDate] = useState('');
+
+  // Planning state
+  const [planYears, setPlanYears] = useState(1);
+  const INFLATION_RATE = 0.085; // 8.5% средняя инфляция
+  const PASSIVE_YIELD = 0.10; // 10% ожидаемая доходность капитала
 
   const handleTxSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +88,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const quickCategories = txType === 'income' ? ['Зарплата', 'Фриланс', 'Подарок', 'Инвестиции'] : ['Продукты', 'Транспорт', 'Развлечения', 'Жилье', 'Здоровье'];
 
+  // Planning calculations
+  const planningResults = useMemo(() => {
+    const monthly = financials.monthly_expenses || 1;
+    const annual = monthly * 12;
+    
+    // Сумма на период с учетом инфляции (FV of an annuity)
+    // Formula: P * ((1+r)^n - 1) / r
+    const totalNeeded = annual * ((Math.pow(1 + INFLATION_RATE, planYears) - 1) / INFLATION_RATE);
+    
+    // Капитал для пассивного дохода: Годовые расходы / Доходность
+    const freedomCapital = annual / PASSIVE_YIELD;
+
+    return {
+      totalNeeded,
+      freedomCapital,
+      monthly
+    };
+  }, [financials.monthly_expenses, planYears]);
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <header className="px-2 flex justify-between items-end">
@@ -90,23 +114,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">Капитал</h2>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Твоя финансовая свобода</p>
          </div>
-         <button 
-           onClick={() => setIsAdding(!isAdding)} 
-           className={`w-14 h-14 rounded-[2rem] shadow-xl flex items-center justify-center transition-all active:scale-90 ${isAdding ? 'bg-slate-900 text-white' : 'bg-indigo-600 text-white'}`}
-         >
-           <i className={`fa-solid ${isAdding ? 'fa-xmark' : 'fa-plus'} text-xl`}></i>
-         </button>
+         {activeTab !== 'planning' && (
+           <button 
+             onClick={() => setIsAdding(!isAdding)} 
+             className={`w-14 h-14 rounded-[2rem] shadow-xl flex items-center justify-center transition-all active:scale-90 ${isAdding ? 'bg-slate-900 text-white' : 'bg-indigo-600 text-white'}`}
+           >
+             <i className={`fa-solid ${isAdding ? 'fa-xmark' : 'fa-plus'} text-xl`}></i>
+           </button>
+         )}
       </header>
 
       {/* Internal Tabs */}
       <div className="flex bg-slate-100 p-1 rounded-[2rem] mx-2">
-         {(['operations', 'debts', 'subscriptions'] as const).map(tab => (
+         {(['operations', 'debts', 'subscriptions', 'planning'] as const).map(tab => (
            <button 
              key={tab}
              onClick={() => { setActiveTab(tab); setIsAdding(false); }}
              className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
            >
-             {tab === 'operations' ? 'Операции' : tab === 'debts' ? 'Долги' : 'Подписки'}
+             {tab === 'operations' ? 'Операции' : tab === 'debts' ? 'Долги' : tab === 'subscriptions' ? 'Подписки' : 'План'}
            </button>
          ))}
       </div>
@@ -304,6 +330,74 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </span>
              </div>
            )}
+        </section>
+      )}
+
+      {activeTab === 'planning' && (
+        <section className="space-y-8 px-1 animate-fade-in">
+           <div className="p-8 bg-slate-900 rounded-[3.5rem] text-white space-y-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/20 rounded-full blur-[50px]"></div>
+              <div className="relative z-10 text-center space-y-4">
+                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">Горизонт планирования</span>
+                 <div className="text-5xl font-black tracking-tighter text-amber-400 italic">
+                    {planYears < 1 ? '6 мес' : planYears === 1 ? '1 год' : `${planYears} лет`}
+                 </div>
+                 <input 
+                   type="range" 
+                   min="0.5" 
+                   max="100" 
+                   step="0.5" 
+                   value={planYears} 
+                   onChange={(e) => setPlanYears(parseFloat(e.target.value))}
+                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                 />
+                 <div className="flex justify-between text-[8px] font-black text-slate-600 uppercase tracking-widest">
+                    <span>6 месяцев</span>
+                    <span>100 лет</span>
+                 </div>
+              </div>
+           </div>
+
+           <div className="grid grid-cols-1 gap-6">
+              <div className="p-8 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
+                 <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                       <i className="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Запас прочности</h4>
+                 </div>
+                 <p className="text-[10px] text-slate-500 leading-tight font-medium">Сумма для жизни на {planYears < 1 ? '6 мес' : `${planYears} лет`} с учетом ежегодной инфляции 8.5%:</p>
+                 <div className="text-3xl font-black text-slate-900 tracking-tighter">
+                    {Math.round(planningResults.totalNeeded).toLocaleString()} <span className="text-lg text-slate-400">{financials.currency}</span>
+                 </div>
+              </div>
+
+              <div className="p-8 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-[3rem] text-white shadow-xl space-y-4 relative overflow-hidden">
+                 <div className="absolute bottom-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mb-10 -mr-10"></div>
+                 <div className="flex items-center gap-3 relative z-10">
+                    <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                       <i className="fa-solid fa-crown text-amber-300"></i>
+                    </div>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Финансовая свобода</h4>
+                 </div>
+                 <p className="text-[10px] text-emerald-50/70 leading-tight font-medium relative z-10">
+                    Капитал, который при доходности 10% годовых будет пожизненно приносить вам текущие {planningResults.monthly.toLocaleString()} {financials.currency}/мес:
+                 </p>
+                 <div className="text-4xl font-black tracking-tighter relative z-10 italic">
+                    {Math.round(planningResults.freedomCapital).toLocaleString()} <span className="text-xl opacity-60 font-bold">{financials.currency}</span>
+                 </div>
+                 <div className="pt-2">
+                    <span className="px-3 py-1 bg-white/10 rounded-full text-[8px] font-black uppercase tracking-widest">Цель №1: Ранняя пенсия</span>
+                 </div>
+              </div>
+           </div>
+
+           <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200 text-center">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
+                Расчет основан на ваших средних расходах: {planningResults.monthly.toLocaleString()} {financials.currency}/мес. <br/>
+                Инфляция: 8.5% | Доходность: 10%
+              </p>
+           </div>
         </section>
       )}
     </div>
