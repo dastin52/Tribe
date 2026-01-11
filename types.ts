@@ -20,6 +20,14 @@ export interface Transaction {
   timestamp: string;
 }
 
+export interface Meeting {
+  id: string;
+  title: string;
+  time: string;
+  location?: string;
+  category: GoalCategory;
+}
+
 export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'quarterly';
 
 export interface Action {
@@ -40,7 +48,7 @@ export interface SubGoal {
   deadline: string;
   frequency: TaskFrequency;
   estimated_days?: number;
-  auto_calculate_amount?: number; // Для финансовых целей: сколько откладывать
+  auto_calculate_amount?: number; 
 }
 
 export interface Project {
@@ -139,6 +147,7 @@ export interface YearGoal {
   logs: ProgressLog[];
   partner_id?: string;
   is_shared?: boolean;
+  is_private?: boolean; // Новое поле для конфиденциальности целей
 }
 
 export interface Value {

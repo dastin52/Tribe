@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { User, Value, YearGoal, AppView, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project } from '../types';
+import { User, Value, YearGoal, AppView, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project, Meeting } from '../types';
 
 const INITIAL_USER: User = {
   id: 'user-' + Math.random().toString(36).substr(2, 9),
@@ -39,9 +39,9 @@ export function useStore() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Telegram Integration
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg?.initDataUnsafe?.user) {
@@ -66,7 +66,8 @@ export function useStore() {
       debts: localStorage.getItem('tribe_debts'),
       subs: localStorage.getItem('tribe_subs'),
       partners: localStorage.getItem('tribe_partners'),
-      txs: localStorage.getItem('tribe_txs')
+      txs: localStorage.getItem('tribe_txs'),
+      meetings: localStorage.getItem('tribe_meetings')
     };
 
     if (saved.user) setUser(JSON.parse(saved.user));
@@ -79,6 +80,7 @@ export function useStore() {
     if (saved.subs) setSubscriptions(JSON.parse(saved.subs));
     if (saved.partners) setPartners(JSON.parse(saved.partners));
     if (saved.txs) setTransactions(JSON.parse(saved.txs));
+    if (saved.meetings) setMeetings(JSON.parse(saved.meetings));
     
     setLoading(false);
   }, []);
@@ -95,8 +97,9 @@ export function useStore() {
       localStorage.setItem('tribe_subs', JSON.stringify(subscriptions));
       localStorage.setItem('tribe_partners', JSON.stringify(partners));
       localStorage.setItem('tribe_txs', JSON.stringify(transactions));
+      localStorage.setItem('tribe_meetings', JSON.stringify(meetings));
     }
-  }, [values, goals, subgoals, projects, user, reviews, debts, subscriptions, partners, transactions, loading]);
+  }, [values, goals, subgoals, projects, user, reviews, debts, subscriptions, partners, transactions, meetings, loading]);
 
   const awardXP = (amount: number) => {
     setUser(prev => {
@@ -109,28 +112,6 @@ export function useStore() {
     });
   };
 
-  const addTransaction = (tx: Omit<Transaction, 'id' | 'timestamp'>) => {
-    const newTx: Transaction = {
-      ...tx,
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString()
-    };
-    setTransactions(prev => [newTx, ...prev]);
-
-    setUser(prev => {
-      if (!prev.financials) return prev;
-      const amountChange = tx.type === 'income' ? tx.amount : -tx.amount;
-      return {
-        ...prev,
-        financials: {
-          ...prev.financials,
-          total_assets: prev.financials.total_assets + amountChange
-        }
-      };
-    });
-    awardXP(20);
-  };
-
   const startDemo = () => {
     const g1Id = crypto.randomUUID();
     const g2Id = crypto.randomUUID();
@@ -140,13 +121,13 @@ export function useStore() {
         id: g1Id, category: 'finance', value_id: 'v1', title: 'Купить велосипед (Carbon Road)', metric: '₽', 
         target_value: 250000, current_value: 45000, start_date: new Date().toISOString(), 
         end_date: new Date(Date.now() + 180 * 86400000).toISOString(), status: 'active', confidence_level: 85, 
-        logs: []
+        logs: [], is_private: false
       },
       {
         id: g2Id, category: 'sport', value_id: 'v2', title: 'Пробежать 10км', metric: 'км', 
         target_value: 10, current_value: 2, start_date: new Date().toISOString(), 
         end_date: new Date(Date.now() + 60 * 86400000).toISOString(), status: 'active', confidence_level: 60, 
-        logs: []
+        logs: [], is_private: true
       }
     ]);
 
@@ -154,16 +135,12 @@ export function useStore() {
       { id: 'sg1', year_goal_id: g1Id, title: 'Откладывать на байк', metric: '₽', target_value: 250000, current_value: 45000, weight: 100, deadline: new Date().toISOString(), frequency: 'monthly', auto_calculate_amount: 35000 },
       { id: 'sg2', year_goal_id: g2Id, title: 'Утренняя пробежка', metric: 'раз', target_value: 24, current_value: 3, weight: 100, deadline: new Date().toISOString(), frequency: 'daily' }
     ]);
-    
-    setDebts([
-      { id: 'd1', title: 'Рассрочка за iPhone', total_amount: 120000, remaining_amount: 45000, interest_rate: 0 }
-    ]);
-    
-    setSubscriptions([
-      { id: 's1', title: 'Telegram Premium', amount: 299, period: 'monthly', category: 'Софт' },
-      { id: 's2', title: 'Яндекс Плюс', amount: 299, period: 'monthly', category: 'Медиа' }
-    ]);
 
+    setMeetings([
+      { id: 'm1', title: 'Тренировка с тренером', time: '18:00', category: 'sport' },
+      { id: 'm2', title: 'Страт. сессия по бюджету', time: '21:00', category: 'finance' }
+    ]);
+    
     setTransactions([
       { id: 't1', amount: 150000, type: 'income', category: 'Зарплата', timestamp: new Date(Date.now() - 86400000 * 2).toISOString() },
       { id: 't2', amount: 35000, type: 'expense', category: 'Накопления', timestamp: new Date(Date.now() - 86400000).toISOString(), note: 'На велосипед' }
@@ -196,6 +173,7 @@ export function useStore() {
     setDebts([]);
     setSubscriptions([]);
     setTransactions([]);
+    setMeetings([]);
     setView(AppView.VALUES);
   };
 
@@ -210,7 +188,6 @@ export function useStore() {
     setSubgoals(prev => prev.map(sg => {
       if (sg.id === sgId) {
         const newValue = sg.current_value + value;
-        // Update main goal too
         setGoals(gPrev => gPrev.map(g => {
           if (g.id === sg.year_goal_id) {
             const addedVal = (value / sg.target_value) * g.target_value * (sg.weight / 100);
@@ -225,9 +202,13 @@ export function useStore() {
     awardXP(100);
   };
 
+  const toggleGoalPrivacy = (goalId: string) => {
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, is_private: !g.is_private } : g));
+  };
+
   return {
     user, setUser, view, setView, values, goals, addGoalWithPlan, partners, reviews, 
-    loading, startDemo, startFresh, debts, subscriptions, transactions, addTransaction,
-    subgoals, projects, updateSubgoalProgress
+    loading, startDemo, startFresh, debts, subscriptions, transactions, meetings,
+    subgoals, projects, updateSubgoalProgress, toggleGoalPrivacy
   };
 }
