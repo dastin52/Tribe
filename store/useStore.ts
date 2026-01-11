@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
-import { User, Value, YearGoal, AppView, AccountabilityPartner, PartnerReview, Debt, Subscription, Transaction, SubGoal, Project, Meeting, ProgressLog } from '../types';
+import { User, Value, YearGoal, AppView, AccountabilityPartner, Debt, Subscription, Transaction, SubGoal, ProgressLog } from '../types';
+import { geminiService } from '../services/gemini';
 
 const INITIAL_USER: User = {
   id: 'user-' + Math.random().toString(36).substr(2, 9),
@@ -29,11 +30,15 @@ export function useStore() {
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [goals, setGoals] = useState<YearGoal[]>([]);
   const [subgoals, setSubgoals] = useState<SubGoal[]>([]);
+  const [values, setValues] = useState<Value[]>([
+    { id: 'v1', title: 'Свобода', description: 'Возможность выбирать свой путь', priority: 5 },
+    { id: 'v2', title: 'Здоровье', description: 'Энергия для великих дел', priority: 4 }
+  ]);
   const [partners, setPartners] = useState<AccountabilityPartner[]>(DEFAULT_PARTNERS);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,19 +46,19 @@ export function useStore() {
       user: localStorage.getItem('tribe_user'),
       goals: localStorage.getItem('tribe_goals'),
       subgoals: localStorage.getItem('tribe_subgoals'),
+      values: localStorage.getItem('tribe_values'),
       txs: localStorage.getItem('tribe_txs'),
       debts: localStorage.getItem('tribe_debts'),
-      subs: localStorage.getItem('tribe_subs'),
-      meetings: localStorage.getItem('tribe_meetings')
+      subs: localStorage.getItem('tribe_subs')
     };
     try {
       if (saved.user) setUser(JSON.parse(saved.user));
       if (saved.goals) setGoals(JSON.parse(saved.goals));
       if (saved.subgoals) setSubgoals(JSON.parse(saved.subgoals));
+      if (saved.values) setValues(JSON.parse(saved.values));
       if (saved.txs) setTransactions(JSON.parse(saved.txs));
       if (saved.debts) setDebts(JSON.parse(saved.debts));
       if (saved.subs) setSubscriptions(JSON.parse(saved.subs));
-      if (saved.meetings) setMeetings(JSON.parse(saved.meetings));
     } catch (e) { console.error("Store init error"); }
     setLoading(false);
   }, []);
@@ -63,12 +68,12 @@ export function useStore() {
       localStorage.setItem('tribe_user', JSON.stringify(user));
       localStorage.setItem('tribe_goals', JSON.stringify(goals));
       localStorage.setItem('tribe_subgoals', JSON.stringify(subgoals));
+      localStorage.setItem('tribe_values', JSON.stringify(values));
       localStorage.setItem('tribe_txs', JSON.stringify(transactions));
       localStorage.setItem('tribe_debts', JSON.stringify(debts));
       localStorage.setItem('tribe_subs', JSON.stringify(subscriptions));
-      localStorage.setItem('tribe_meetings', JSON.stringify(meetings));
     }
-  }, [user, goals, subgoals, transactions, debts, subscriptions, meetings, loading]);
+  }, [user, goals, subgoals, values, transactions, debts, subscriptions, loading]);
 
   const awardXP = (amount: number, difficulty: number = 1) => {
     setUser(prev => {
@@ -101,12 +106,21 @@ export function useStore() {
     awardXP(100, 5);
   };
 
+  const generateGoalVision = async (goalId: string) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const imageUrl = await geminiService.generateGoalVision(goal.title, goal.description || "");
+    if (imageUrl) {
+      setGoals(prev => prev.map(g => g.id === goalId ? { ...g, image_url: imageUrl } : g));
+      awardXP(200);
+    }
+  };
+
   const verifyProgress = (goalId: string, logId: string) => {
     setGoals(prev => prev.map(g => {
       if (g.id === goalId) {
         const updatedLogs = g.logs.map(l => l.id === logId ? { ...l, is_verified: true, verified_by: partners[0].id } : l);
         const verifiedValue = updatedLogs.filter(l => l.is_verified).reduce((acc, l) => acc + l.value, 0);
-        // В Tribe реальный подтвержденный прогресс
         return { ...g, logs: updatedLogs, current_value: verifiedValue };
       }
       return g;
@@ -132,17 +146,14 @@ export function useStore() {
     awardXP(50);
   };
 
-  // Add implementation for toggleGoalPrivacy to fix property access error in App.tsx
-  const toggleGoalPrivacy = (goalId: string) => {
-    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, is_private: !g.is_private } : g));
-  };
-
   return {
-    user, view, setView, goals, subgoals, transactions, debts, subscriptions, meetings, partners, loading,
-    updateSubgoalProgress, addTransaction, awardXP, verifyProgress, toggleGoalPrivacy,
+    user, view, setView, goals, subgoals, values, transactions, debts, subscriptions, meetings, partners, loading,
+    updateSubgoalProgress, addTransaction, awardXP, verifyProgress, generateGoalVision,
+    addValue: (v: Omit<Value, 'id'>) => setValues(p => [...p, { ...v, id: crypto.randomUUID() }]),
     addDebt: (d: any) => setDebts(prev => [...prev, { ...d, id: crypto.randomUUID() }]),
     addSubscription: (s: any) => setSubscriptions(prev => [...prev, { ...s, id: crypto.randomUUID() }]),
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); awardXP(500, g.difficulty); },
+    toggleGoalPrivacy: (id: string) => setGoals(p => p.map(g => g.id === id ? {...g, is_private: !g.is_private} : g)),
     updateUserInfo: (d: any) => setUser(p => ({...p, ...d})),
     resetData: () => { localStorage.clear(); window.location.reload(); },
     startDemo: () => {
@@ -157,9 +168,6 @@ export function useStore() {
         ], is_private: false
       }]);
       setSubgoals([{ id: 'sg1', year_goal_id: g1Id, title: 'Пополнение ИИС', metric: '₽', target_value: 50000, current_value: 10000, weight: 100, deadline: now.toISOString(), frequency: 'monthly', difficulty: 4 }]);
-      setTransactions([{ id: 't1', amount: 150000, type: 'income', category: 'Зарплата', timestamp: now.toISOString() }]);
-      setDebts([{ id: 'd1', title: 'MacBook рассрочка', total_amount: 150000, remaining_amount: 70000, type: 'i_owe', category: 'bank' }]);
-      setSubscriptions([{ id: 's1', title: 'Tribe Pro', amount: 990, period: 'monthly', category: 'digital' }]);
       setUser({ ...INITIAL_USER, level: 3, xp: 450, streak: 12, financials: { ...INITIAL_USER.financials!, total_assets: 450000 } });
       setView(AppView.DASHBOARD);
     }

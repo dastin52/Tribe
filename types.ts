@@ -2,12 +2,12 @@
 export type GoalCategory = "finance" | "sport" | "growth" | "work" | "other";
 
 export type PartnerRole = 
-  | 'accomplice'  // Сообщник (Friend)
-  | 'guardian'    // Хранитель (Spouse/Family)
-  | 'sensei'      // Сэнсэй (Coach/Mentor)
-  | 'teammate'    // Тиммейт (Colleague)
-  | 'navigator'   // Штурман (Strategy partner)
-  | 'roaster';     // Критик (High accountability)
+  | 'accomplice'  // Сообщник
+  | 'guardian'    // Хранитель
+  | 'sensei'      // Сэнсэй
+  | 'teammate'    // Тиммейт
+  | 'navigator'   // Штурман
+  | 'roaster';     // Критик
 
 export type TransactionType = 'income' | 'expense';
 
@@ -18,7 +18,7 @@ export interface Transaction {
   category: string;
   note?: string;
   timestamp: string;
-  goal_id?: string; // Связь с финансовой целью
+  goal_id?: string;
 }
 
 export interface Meeting {
@@ -31,13 +31,6 @@ export interface Meeting {
 
 export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'quarterly';
 
-export interface Action {
-  id: string;
-  title: string;
-  is_completed: boolean;
-  priority: number;
-}
-
 export interface SubGoal {
   id: string;
   year_goal_id: string;
@@ -48,8 +41,7 @@ export interface SubGoal {
   weight: number;
   deadline: string;
   frequency: TaskFrequency;
-  estimated_days?: number;
-  difficulty: number; // 1-10
+  difficulty: number;
 }
 
 export interface Project {
@@ -58,12 +50,7 @@ export interface Project {
   owner_id: string;
   title: string;
   status: 'planned' | 'active' | 'completed';
-  estimated_effort_hours?: number;
-  complexity?: number;
 }
-
-export type DebtCategory = 'bank' | 'card' | 'friend' | 'other';
-export type DebtDirection = 'i_owe';
 
 export interface Debt {
   id: string;
@@ -71,8 +58,8 @@ export interface Debt {
   total_amount: number;
   remaining_amount: number;
   due_date?: string;
-  type: DebtDirection | 'they_owe';
-  category: DebtCategory;
+  type: 'i_owe' | 'they_owe';
+  category: 'bank' | 'card' | 'friend' | 'other';
 }
 
 export interface Subscription {
@@ -81,7 +68,6 @@ export interface Subscription {
   amount: number;
   period: 'monthly' | 'yearly';
   category: string;
-  next_billing_date?: string;
 }
 
 export interface FinancialSnapshot {
@@ -94,14 +80,12 @@ export interface FinancialSnapshot {
 
 export interface User {
   id: string;
-  telegram_id?: string;
   name: string;
   photo_url?: string;
   xp: number;
   level: number;
   streak: number;
   last_active: string;
-  is_demo?: boolean;
   financials?: FinancialSnapshot;
   energy_profile: {
     peak_hours: number[];
@@ -114,15 +98,6 @@ export interface AccountabilityPartner {
   name: string;
   role: PartnerRole;
   avatar?: string;
-}
-
-// Added PartnerReview interface
-export interface PartnerReview {
-  id: string;
-  partner_id: string;
-  content: string;
-  rating: number;
-  timestamp: string;
 }
 
 export interface ProgressLog {
@@ -147,24 +122,20 @@ export interface YearGoal {
   current_value: number;
   start_date: string;
   end_date: string;
-  status: GoalStatus;
+  status: "planned" | "active" | "paused" | "completed" | "abandoned";
   confidence_level: number;
-  difficulty: number; // 1-10
+  difficulty: number;
   logs: ProgressLog[];
-  partner_id?: string;
-  is_shared?: boolean;
+  image_url?: string; // Сгенерированное ИИ видение
   is_private?: boolean;
 }
 
 export interface Value {
   id: string;
-  owner_id: string;
   title: string;
   description: string;
   priority: 1 | 2 | 3 | 4 | 5;
 }
-
-export type GoalStatus = "planned" | "active" | "paused" | "completed" | "abandoned";
 
 export enum AppView {
   LANDING = 'landing',

@@ -2,7 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const geminiService = {
-  // Use gemini-3-flash-preview for basic text advice
   async getDailyBriefing(goals: any[], financials: any, energyStatus: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -21,7 +20,44 @@ export const geminiService = {
     }
   },
 
-  // Use gemini-3-flash-preview for conversational insights
+  async getFinanceAdvice(txs: any[], goals: any[]) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Проанализируй транзакции: ${JSON.stringify(txs.slice(-10))}. 
+        Учитывая финансовые цели: ${JSON.stringify(goals.filter(g => g.category === 'finance'))}.
+        Дай ОДИН конкретный совет по оптимизации бюджета для достижения этих целей (до 25 слов).`,
+      });
+      return response.text;
+    } catch (e) {
+      return "Следи за мелкими расходами, они крадут твое будущее.";
+    }
+  },
+
+  async generateGoalVision(title: string, description: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `A cinematic, highly detailed, inspiring 4k image representing the successful achievement of the goal: "${title}". Context: ${description}. Digital art style, vibrant colors, epic composition, motivation theme.`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: [{ text: prompt }] },
+        config: { imageConfig: { aspectRatio: "16:9" } }
+      });
+
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error("Image generation failed", e);
+      return null;
+    }
+  },
+
   async getCoachingInsight(category: string, title: string, userMessage?: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -54,7 +90,6 @@ export const geminiService = {
     }
   },
 
-  // Use gemini-3-pro-preview for advanced reasoning (goal decomposition)
   async decomposeGoal(goalTitle: string, metric: string, target: number, category: string, description: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

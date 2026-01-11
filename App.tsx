@@ -16,6 +16,7 @@ const App: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<YearGoal | null>(null);
   const [balanceVisible, setBalanceVisible] = useState(false);
+  const [generatingVision, setGeneratingVision] = useState(false);
   
   const financials = store.user.financials || { total_assets: 0, total_debts: 0, monthly_income: 0, monthly_expenses: 0, currency: '₽' };
   const netWorth = financials.total_assets - financials.total_debts;
@@ -45,6 +46,16 @@ const App: React.FC = () => {
   const todayTasks = useMemo(() => {
     return store.subgoals.filter(sg => sg.current_value < sg.target_value).slice(0, 5);
   }, [store.subgoals]);
+
+  const handleGenerateVision = async () => {
+    if (!selectedGoal) return;
+    setGeneratingVision(true);
+    await store.generateGoalVision(selectedGoal.id);
+    // Refresh selected goal from store
+    const updated = store.goals.find(g => g.id === selectedGoal.id);
+    if (updated) setSelectedGoal(updated);
+    setGeneratingVision(false);
+  };
 
   if (store.view === AppView.LANDING) {
     return (
@@ -79,7 +90,7 @@ const App: React.FC = () => {
         <FinanceView 
           financials={financials} transactions={store.transactions}
           debts={store.debts} subscriptions={store.subscriptions}
-          balanceVisible={balanceVisible} netWorth={netWorth} balanceHistory={balanceHistory}
+          balanceVisible={balanceVisible} netWorth={netWorth}
           onAddTransaction={store.addTransaction} onAddDebt={store.addDebt} 
           onAddSubscription={store.addSubscription} goals={store.goals}
         />
@@ -88,24 +99,79 @@ const App: React.FC = () => {
       {store.view === AppView.ANALYTICS && <AnalyticsView goals={store.goals} partners={store.partners} ikigaiData={ikigaiData} onTogglePrivacy={store.toggleGoalPrivacy} />}
       {store.view === AppView.SOCIAL && <SocialView partners={store.partners} goals={store.goals} onVerify={store.verifyProgress} />}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
-      {showWizard && <GoalWizard values={[]} onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}
+      {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}
+      
       {selectedGoal && (
-        <div className="fixed inset-0 bg-white z-[100] flex flex-col animate-fade-in">
-           <header className="p-6 flex justify-between items-center border-b border-slate-50">
+        <div className="fixed inset-0 bg-white z-[100] flex flex-col animate-fade-in overflow-y-auto custom-scrollbar">
+           <header className="p-6 flex justify-between items-center border-b border-slate-50 sticky top-0 bg-white/80 backdrop-blur-md z-10">
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><i className="fa-solid fa-chevron-left"></i></button>
-              <h3 className="font-black text-xs uppercase tracking-widest">Цель</h3>
+              <h3 className="font-black text-[10px] uppercase tracking-widest">Детали Цели</h3>
               <div className="w-10"></div>
            </header>
-           <div className="flex-1 overflow-y-auto p-8 space-y-8">
-              <h2 className="text-5xl font-black text-slate-900 tracking-tighter italic leading-none">{selectedGoal.title}</h2>
-              <div className="p-10 bg-slate-900 rounded-[3.5rem] text-white text-center">
-                <div className="text-6xl font-black italic">{Math.round((selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100)}%</div>
-                <div className="h-2 w-full bg-white/10 rounded-full mt-4 overflow-hidden">
-                   <div className="h-full bg-indigo-500" style={{width: `${(selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100}%`}}></div>
+           
+           <div className="p-8 space-y-8 pb-20">
+              <div className="space-y-2">
+                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{selectedGoal.category}</span>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic leading-none">{selectedGoal.title}</h2>
+              </div>
+
+              {/* AI Vision Board Section */}
+              <div className="relative group">
+                <div className="aspect-video w-full bg-slate-100 rounded-[2.5rem] overflow-hidden shadow-inner border border-slate-100">
+                  {selectedGoal.image_url ? (
+                    <img src={selectedGoal.image_url} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 gap-3">
+                      <i className="fa-solid fa-image text-3xl"></i>
+                      <p className="text-[9px] font-black uppercase tracking-widest">Видение не создано</p>
+                    </div>
+                  )}
+                </div>
+                {!selectedGoal.image_url && (
+                  <button 
+                    onClick={handleGenerateVision}
+                    disabled={generatingVision}
+                    className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-[2.5rem]"
+                  >
+                    <div className="px-6 py-3 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
+                      {generatingVision ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-wand-magic-sparkles text-indigo-500"></i>}
+                      Сгенерировать видение
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              <div className="p-8 bg-slate-900 rounded-[3.5rem] text-white flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Общий прогресс</span>
+                  <div className="text-5xl font-black italic">{Math.round((selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100)}%</div>
+                </div>
+                <div className="w-20 h-20 rounded-full border-4 border-indigo-500 flex items-center justify-center">
+                   <i className="fa-solid fa-bolt text-indigo-400 text-2xl"></i>
                 </div>
               </div>
-              <div className="p-6 bg-slate-50 rounded-3xl">
-                 <p className="text-slate-500 font-medium italic">"{selectedGoal.description || 'Нет описания'}"</p>
+
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Мировые задачи (Milestones)</h4>
+                 <div className="space-y-3">
+                    {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map(sg => (
+                      <div key={sg.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                         <div className="flex justify-between items-center mb-4">
+                            <h5 className="font-black text-slate-800 text-sm uppercase italic">{sg.title}</h5>
+                            <span className="text-[10px] font-black text-indigo-500">{Math.round((sg.current_value / sg.target_value) * 100)}%</span>
+                         </div>
+                         <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 transition-all duration-1000" style={{width: `${(sg.current_value / sg.target_value) * 100}%`}}></div>
+                         </div>
+                      </div>
+                    ))}
+                 </div>
+              </div>
+
+              <div className="p-8 bg-indigo-50 rounded-[3rem] border border-indigo-100">
+                 <p className="text-indigo-900 font-bold italic text-sm leading-relaxed">
+                   "{selectedGoal.description || 'Нет описания цели. Добавьте его в настройках, чтобы ИИ мог лучше помогать вам.'}"
+                 </p>
               </div>
            </div>
         </div>
