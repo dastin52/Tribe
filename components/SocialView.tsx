@@ -14,13 +14,14 @@ const roleMeta: Record<PartnerRole, { label: string, color: string, bg: string }
 interface SocialViewProps {
   partners: AccountabilityPartner[];
   goals: YearGoal[];
-  onVerify: (goalId: string, logId: string, verifierId: string) => void;
+  onVerify: (goalId: string, logId: string, verifierId: string, rating?: number, comment?: string) => void;
   onAddPartner: (name: string, role: string) => void;
 }
 
 export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerify, onAddPartner }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [activeRating, setActiveRating] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState<Record<string, string>>({});
 
   const demoIncoming = useMemo(() => [
     { id: 'req-1', name: 'Иван', goal: 'Пробежать 10км', value: '10 км', avatar: 'https://i.pravatar.cc/150?u=ivan', proof: '🏃‍♂️ Сделано за 52 мин!' },
@@ -93,19 +94,42 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 italic">Твои пруфы ждут подтверждения</h3>
           <div className="space-y-3">
              {pendingMyLogs.map(log => (
-               <div key={log.id} className="p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 relative overflow-hidden">
+               <div key={log.id} className="p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 relative overflow-hidden space-y-4">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-white/40 blur-2xl"></div>
-                  <div className="flex justify-between items-center mb-4 relative z-10">
-                     <div>
-                        <h4 className="font-black text-indigo-900 text-xs uppercase italic">{log.goalTitle}</h4>
-                        <p className="text-[9px] font-bold text-indigo-600 mt-1 italic">Объем: +{log.value} в общую копилку</p>
-                     </div>
+                  <div className="relative z-10">
+                     <h4 className="font-black text-indigo-900 text-xs uppercase italic">{log.goalTitle}</h4>
+                     <p className="text-[9px] font-bold text-indigo-600 mt-1 italic">Объем: +{log.value} в общую копилку</p>
                   </div>
+
+                  <div className="relative z-10 space-y-2">
+                     <div className="flex gap-1">
+                        {[1,2,3,4,5].map(star => (
+                          <button 
+                            key={star} 
+                            onClick={() => setActiveRating(`${log.id}-${star}`)}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${activeRating?.startsWith(log.id) && parseInt(activeRating.split('-')[1]) >= star ? 'bg-indigo-600 text-white' : 'bg-white/50 text-indigo-300'}`}
+                          >
+                             <i className="fa-solid fa-star text-[8px]"></i>
+                          </button>
+                        ))}
+                     </div>
+                     <input 
+                       type="text" 
+                       placeholder="Комментарий (необязательно)" 
+                       className="w-full bg-white/50 border border-indigo-100 rounded-xl p-3 text-[10px] font-bold outline-none italic"
+                       value={commentText[log.id] || ''}
+                       onChange={(e) => setCommentText({...commentText, [log.id]: e.target.value})}
+                     />
+                  </div>
+
                   <div className="flex gap-2 relative z-10">
                     {partners.length === 0 ? (
                       <div className="w-full text-center py-2 text-[8px] font-black text-indigo-300 uppercase italic">У тебя нет друзей в племени</div>
                     ) : partners.map(p => (
-                      <button key={p.id} onClick={() => onVerify(log.goal_id, log.id, p.id)} className="flex-1 py-3 bg-white text-indigo-900 font-black text-[9px] rounded-xl uppercase shadow-sm italic active:scale-95 transition-all">
+                      <button key={p.id} onClick={() => {
+                        const rating = activeRating?.startsWith(log.id) ? parseInt(activeRating.split('-')[1]) : 5;
+                        onVerify(log.goal_id, log.id, p.id, rating, commentText[log.id]);
+                      }} className="flex-1 py-3 bg-white text-indigo-900 font-black text-[9px] rounded-xl uppercase shadow-sm italic active:scale-95 transition-all">
                         {p.name}
                       </button>
                     ))}

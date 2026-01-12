@@ -4,7 +4,7 @@ import { User, Value, YearGoal, AppView, AccountabilityPartner, Debt, Subscripti
 import { geminiService } from '../services/gemini';
 import { INITIAL_USER, INITIAL_VALUES, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_MEETINGS, SAMPLE_TRANSACTIONS } from './initialData';
 
-const STORE_VERSION = '2.0.0';
+const STORE_VERSION = '2.1.0';
 
 export function useStore() {
   const [user, setUser] = useState<User>(INITIAL_USER);
@@ -99,10 +99,10 @@ export function useStore() {
       }));
     },
     
-    verifyProgress: (gId: string, lId: string, vId: string) => {
+    verifyProgress: (gId: string, lId: string, vId: string, rating?: number, comment?: string) => {
        setGoals(prev => prev.map(g => {
          if (g.id === gId) {
-           const updatedLogs = (g.logs || []).map(l => l.id === lId ? { ...l, is_verified: true, verified_by: vId } : l);
+           const updatedLogs = (g.logs || []).map(l => l.id === lId ? { ...l, is_verified: true, verified_by: vId, rating, comment } : l);
            const totalValue = updatedLogs.reduce((acc, l) => acc + (l.is_verified ? l.value : 0), 0);
            return { ...g, logs: updatedLogs, current_value: totalValue, status: totalValue >= g.target_value ? 'completed' : 'active' };
          }

@@ -20,8 +20,6 @@ interface FinanceViewProps {
 }
 
 const EXPENSE_CATEGORIES = ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Одежда', 'Связь', 'Подписки', 'Налоги', 'Другое'];
-const INCOME_CATEGORIES = ['Зарплата', 'Бизнес', 'Бонус', 'Подарок', 'Инвестиции', 'Продажа', 'Другое'];
-const DEBT_CATEGORIES = ['Банк', 'Кредитка', 'Друг', 'Рассрочка', 'Ипотека', 'Другое'];
 
 export const FinanceView: React.FC<FinanceViewProps> = ({ 
   financials, transactions, debts, subscriptions, balanceVisible, setBalanceVisible, netWorth, balanceHistory, onAddTransaction, onAddDebt, onAddSubscription, goals 
@@ -31,11 +29,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [loadingAdvice, setLoadingAdvice] = useState(false);
   
-  // Параметры для планирования
   const [targetYears, setTargetYears] = useState(10);
-  const [inflationRate, setInflationRate] = useState(0.08); // 8% по умолчанию
-  const [yieldRate, setYieldRate] = useState(0.12); // 12% доходность капитала по умолчанию
-  const [showCompound, setShowCompound] = useState(false); // Переключатель на сложный процент
+  const [inflationRate, setInflationRate] = useState(0.08);
+  const [yieldRate, setYieldRate] = useState(0.12);
+  const [showCompound, setShowCompound] = useState(false);
   const [showFormulaInfo, setShowFormulaInfo] = useState<string | null>(null);
 
   const [amount, setAmount] = useState('');
@@ -44,67 +41,44 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [debtType, setDebtType] = useState<'i_owe' | 'they_owe'>('i_owe');
 
-  // Расчет средних расходов за последние полгода
+  // Fix: Added missing calculations for iOweTotal, theyOweTotal, and totalMonthlySubs
+  const iOweTotal = useMemo(() => 
+    debts.filter(d => d.type === 'i_owe').reduce((acc, d) => acc + d.remaining_amount, 0), 
+  [debts]);
+
+  const theyOweTotal = useMemo(() => 
+    debts.filter(d => d.type === 'they_owe').reduce((acc, d) => acc + d.remaining_amount, 0), 
+  [debts]);
+
+  const totalMonthlySubs = useMemo(() => 
+    subscriptions.reduce((acc, s) => acc + (s.period === 'monthly' ? s.amount : s.amount / 12), 0), 
+  [subscriptions]);
+
   const averageMonthlyBurn = useMemo(() => {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    
-    const relevantExpenses = transactions.filter(t => 
-      t.type === 'expense' && new Date(t.timestamp) >= sixMonthsAgo
-    );
-    
-    // Сумма подписок (фиксированная)
+    const relevantExpenses = transactions.filter(t => t.type === 'expense' && new Date(t.timestamp) >= sixMonthsAgo);
     const subsTotal = subscriptions.reduce((acc, s) => acc + s.amount, 0);
-    
     if (relevantExpenses.length === 0) return (financials.monthly_expenses || 0) + subsTotal;
-    
-    const totalExpenses = relevantExpenses.reduce((acc, t) => acc + t.amount, 0);
-    // Делим на 6, чтобы получить среднее в месяц
-    return (totalExpenses / 6) + subsTotal;
+    return (relevantExpenses.reduce((acc, t) => acc + t.amount, 0) / 6) + subsTotal;
   }, [transactions, subscriptions, financials.monthly_expenses]);
 
-  // Расчет показателей за текущий месяц
   const currentMonthStats = useMemo(() => {
     const now = new Date();
     const curMonth = now.getMonth();
     const curYear = now.getFullYear();
-    
     const filtered = transactions.filter(t => {
       const d = new Date(t.timestamp);
       return d.getMonth() === curMonth && d.getFullYear() === curYear;
     });
-    
     const income = filtered.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
     const expense = filtered.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
-    
     return { income, expense };
   }, [transactions]);
 
-  const handleGetAdvice = async () => {
-    setLoadingAdvice(true);
-    const advice = await geminiService.getFinanceAdvice(transactions, goals);
-    setAiAdvice(advice);
-    setLoadingAdvice(false);
-  };
-
-  const handleAdd = () => {
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) return;
-    if (activeTab === 'operations') onAddTransaction(numAmount, type, category, title);
-    else if (activeTab === 'debts') onAddDebt({ title, total_amount: numAmount, remaining_amount: numAmount, type: debtType, category: 'other' });
-    else if (activeTab === 'subscriptions') onAddSubscription({ title, amount: numAmount, period: 'monthly', category });
-    setIsAdding(false);
-  };
-
-  const iOweTotal = useMemo(() => debts.filter(d => d.type === 'i_owe').reduce((acc, d) => acc + d.remaining_amount, 0), [debts]);
-  const theyOweTotal = useMemo(() => debts.filter(d => d.type === 'they_owe').reduce((acc, d) => acc + d.remaining_amount, 0), [debts]);
-  const totalMonthlySubs = useMemo(() => subscriptions.reduce((acc, s) => acc + s.amount, 0), [subscriptions]);
-
-  // Расчет пассивного капитала: (Расход * 12) / Реальная Доходность (Доходность - Инфляция)
   const realYield = Math.max(0.01, yieldRate - inflationRate);
   const passiveCapitalGoal = (averageMonthlyBurn * 12) / realYield;
   
-  // Расчет суммы на X лет (сколько нужно иметь сейчас, чтобы тратить столько-то лет с учетом инфляции)
   const inflationAdjustedTotal = useMemo(() => {
     let total = 0;
     let annualExpense = averageMonthlyBurn * 12;
@@ -114,7 +88,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     return total;
   }, [averageMonthlyBurn, targetYears, inflationRate]);
 
-  // Данные для графика роста (сложный процент)
   const compoundData = useMemo(() => {
     let current = netWorth;
     const history = [];
@@ -128,6 +101,54 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const freedomIndex = Math.round((netWorth / passiveCapitalGoal) * 100);
   const formatVal = (val: number) => balanceVisible ? `${Math.round(val).toLocaleString()} ${financials.currency}` : `∗∗∗ ${financials.currency}`;
 
+  // РАСЧЕТ УРОВНЕЙ СВОБОДЫ
+  const freedomLevels = useMemo(() => {
+    const burn = averageMonthlyBurn;
+    return [
+      {
+        id: 'L1',
+        title: 'Спасательный жилет',
+        desc: '6 месяцев жизни в запасе',
+        target: burn * 6,
+        icon: 'fa-life-ring',
+        color: 'text-blue-500'
+      },
+      {
+        id: 'L2',
+        title: 'Твердая почва',
+        desc: '2 года жизни без долгов',
+        target: burn * 24,
+        icon: 'fa-anchor',
+        color: 'text-emerald-500'
+      },
+      {
+        id: 'L3',
+        title: 'Автономия',
+        desc: 'Пассивный доход = База',
+        target: passiveCapitalGoal,
+        icon: 'fa-leaf',
+        color: 'text-indigo-500'
+      },
+      {
+        id: 'L4',
+        title: 'Цифровой Кочевник',
+        desc: 'Любая точка мира (2x База)',
+        target: passiveCapitalGoal * 2,
+        icon: 'fa-plane-departure',
+        color: 'text-violet-500'
+      },
+      {
+        id: 'L5',
+        title: '«Да пошёл ты!»',
+        desc: '100М + Дом + Машина',
+        target: 100000000,
+        icon: 'fa-fort-awesome',
+        color: 'text-rose-600',
+        special: true
+      }
+    ];
+  }, [averageMonthlyBurn, passiveCapitalGoal]);
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -137,6 +158,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       );
     }
     return null;
+  };
+
+  const handleGetAdvice = async () => {
+    setLoadingAdvice(true);
+    const advice = await geminiService.getFinanceAdvice(transactions, goals);
+    setAiAdvice(advice);
+    setLoadingAdvice(false);
   };
 
   return (
@@ -163,7 +191,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       <div className="px-1 space-y-6">
         {activeTab === 'operations' && (
           <div className="space-y-6 animate-fade-in">
-            {/* График и текущий баланс */}
             <div className="bg-[#0f172a] rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden mx-1">
                <div className="absolute top-10 right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Общий капитал</span>
@@ -179,7 +206,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                </div>
             </div>
 
-            {/* Сводка за месяц */}
             <div className="grid grid-cols-2 gap-3 mx-1">
                <div className="p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm">
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 italic">Доход / Месяц</span>
@@ -191,7 +217,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                </div>
             </div>
 
-            {/* Список транзакций */}
             <div className="space-y-3">
               {transactions.slice(-10).reverse().map(tx => (
                 <div key={tx.id} className="p-5 bg-white border border-slate-100 rounded-[2rem] flex justify-between items-center shadow-sm mx-1">
@@ -210,47 +235,61 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         )}
 
         {activeTab === 'planning' && (
-           <div className="space-y-6 animate-fade-in">
-              {/* Карточка финансовой независимости */}
+           <div className="space-y-8 animate-fade-in">
+              {/* Карта Свободы */}
               <div className="p-10 bg-gradient-to-br from-[#1e1b4b] to-[#312e81] rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden mx-1">
                  <div className="absolute top-10 right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
-                 <div className="flex justify-between items-start mb-10">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 italic">Финансовая независимость</h4>
-                    <button onClick={() => setShowFormulaInfo(showFormulaInfo === 'passive' ? null : 'passive')} className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[10px]"><i className="fa-solid fa-info"></i></button>
-                 </div>
+                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 italic mb-10">Прогресс к Свободе</h4>
                  
                  <div className="space-y-8">
-                    <div>
-                       <div className="flex justify-between items-end mb-4">
-                          <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 italic">Твоя автономность</span>
-                          <span className="text-5xl font-black italic text-emerald-400 tracking-tighter">{freedomIndex}%</span>
-                       </div>
-                       <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden border border-white/5 p-0.5">
-                          <div className="h-full bg-emerald-400 transition-all duration-1000 rounded-full" style={{ width: `${Math.min(100, freedomIndex)}%` }}></div>
-                       </div>
-                    </div>
-                    
-                    <div className="p-6 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-sm">
-                       <span className="text-[9px] font-black text-slate-400 uppercase block mb-1 italic tracking-widest">Капитал для пассивного дохода</span>
-                       <span className="text-2xl font-black block">{formatVal(passiveCapitalGoal)}</span>
-                       <span className="text-[7px] font-black text-indigo-400/60 uppercase italic tracking-wider">
-                          Базис: {formatVal(averageMonthlyBurn)} / мес
-                       </span>
-                    </div>
-
-                    {showFormulaInfo === 'passive' && (
-                       <div className="p-4 bg-indigo-900/50 rounded-2xl border border-indigo-400/20 text-[9px] font-medium leading-relaxed italic animate-fade-in">
-                          Формула: (Средний годовой расход) / (Доходность - Инфляция). <br/>
-                          Это сумма, которую ты можешь "положить под процент", и проценты будут полностью покрывать твою жизнь, не уменьшая основной капитал.
-                       </div>
-                    )}
+                    {freedomLevels.map((level, idx) => {
+                      const progress = Math.min(100, (netWorth / level.target) * 100);
+                      const isUnlocked = netWorth >= level.target;
+                      return (
+                        <div key={level.id} className={`relative ${!isUnlocked && 'opacity-60'}`}>
+                           <div className="flex justify-between items-end mb-2">
+                              <div className="flex items-center gap-3">
+                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isUnlocked ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-white/10 text-white/40'}`}>
+                                    <i className={`fa-solid ${level.icon} text-xs`}></i>
+                                 </div>
+                                 <div>
+                                    <span className={`text-[10px] font-black uppercase tracking-widest block italic ${level.color}`}>{level.title}</span>
+                                    <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tight">{level.desc}</span>
+                                 </div>
+                              </div>
+                              <span className="text-xs font-black italic">{Math.round(progress)}%</span>
+                           </div>
+                           <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
+                              <div className={`h-full transition-all duration-1000 rounded-full ${isUnlocked ? 'bg-emerald-400' : 'bg-indigo-400'}`} style={{ width: `${progress}%` }}></div>
+                           </div>
+                           {level.special && isUnlocked && (
+                             <div className="absolute -top-4 -right-2 rotate-12 bg-rose-600 text-white text-[6px] font-black px-2 py-1 rounded-lg uppercase tracking-widest shadow-xl">Unlocked</div>
+                           )}
+                        </div>
+                      )
+                    })}
                  </div>
               </div>
 
-              {/* Интерактивные настройки планирования */}
+              {/* Расширенная информация по уровням */}
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-100 space-y-6 shadow-sm mx-1">
+                 <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Твой путь: Уровень «Да пошёл ты!»</h5>
+                 <p className="text-[11px] font-medium text-slate-500 italic leading-relaxed">
+                   «25 лет — это жизнь. 50 лет — это целое состояние. 100 миллионов — это свобода сказать любому человеку на планете «Да пошёл ты!». Это дом, машина и капитал, который работает вечно».
+                 </p>
+                 <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex justify-between items-center">
+                    <div>
+                       <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 italic">До цели «Да пошёл ты!» осталось:</span>
+                       <span className="text-xl font-black text-rose-600">{formatVal(Math.max(0, 100000000 - netWorth))}</span>
+                    </div>
+                    <i className="fa-solid fa-crown text-slate-200 text-3xl"></i>
+                 </div>
+              </div>
+
+              {/* Настройки планирования */}
               <div className="bg-white p-8 rounded-[3rem] border border-slate-100 space-y-8 shadow-sm mx-1">
                 <div className="flex justify-between items-center">
-                  <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Моделирование будущего</h5>
+                  <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Моделирование</h5>
                   <div className="flex gap-2">
                      <button onClick={() => setShowCompound(false)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!showCompound ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Запас</button>
                      <button onClick={() => setShowCompound(true)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${showCompound ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Рост</button>
@@ -267,14 +306,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                        <input type="range" min="1" max="100" step="1" value={targetYears} onChange={(e) => setTargetYears(parseInt(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
                     <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                       <span className="text-[9px] font-black text-slate-400 uppercase italic block mb-2">Нужно накопить на этот срок:</span>
+                       <span className="text-[9px] font-black text-slate-400 uppercase italic block mb-2">Накопить на срок:</span>
                        <div className="text-xl font-black italic text-slate-900">{formatVal(inflationAdjustedTotal)}</div>
-                       <p className="text-[8px] font-bold text-slate-400 mt-4 uppercase italic opacity-70 leading-tight">* Если ты решишь просто тратить капитал без работы, эта сумма покроет твои расходы на {targetYears} лет с учетом инфляции.</p>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-6 animate-scale-up">
-                    <div className="h-32 w-full -mx-2">
+                    <div className="h-32 w-full">
                        <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={compoundData}>
                              <Tooltip content={<CustomTooltip />} />
@@ -283,18 +321,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                        </ResponsiveContainer>
                     </div>
                     <div className="p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100">
-                       <span className="text-[9px] font-black text-indigo-400 uppercase italic block mb-2">Капитал через {targetYears} лет:</span>
+                       <span className="text-[9px] font-black text-indigo-400 uppercase italic block mb-2">Через {targetYears} лет:</span>
                        <div className="text-2xl font-black text-indigo-900 italic">{formatVal(compoundData[compoundData.length - 1].balance)}</div>
-                       <div className="mt-4 flex justify-between items-center">
-                          <p className="text-[8px] font-bold text-indigo-400 uppercase italic leading-tight">Расчет "Сложного Процента": <br/> Твой капитал работает на тебя.</p>
-                          <button onClick={() => setShowFormulaInfo(showFormulaInfo === 'growth' ? null : 'growth')} className="w-5 h-5 rounded-full border border-indigo-200 flex items-center justify-center text-[8px] text-indigo-400"><i className="fa-solid fa-info"></i></button>
-                       </div>
-                       {showFormulaInfo === 'growth' && (
-                         <div className="mt-4 p-3 bg-white rounded-xl border border-indigo-100 text-[8px] text-indigo-600 font-bold uppercase italic animate-fade-in leading-relaxed">
-                            Рост = Капитал * (1 + Доходность)^Годы. <br/>
-                            Это магия, при которой твои деньги сами создают новые деньги, если ты их не тратишь.
-                         </div>
-                       )}
                     </div>
                   </div>
                 )}
@@ -302,49 +330,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-50">
                    <div className="space-y-3">
                       <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                         <span>Инфляция (РФ)</span>
+                         <span>Инфляция</span>
                          <span className="text-rose-500 italic">{Math.round(inflationRate * 100)}%</span>
                       </div>
                       <input type="range" min="0" max="0.30" step="0.01" value={inflationRate} onChange={(e) => setInflationRate(parseFloat(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-rose-500" />
                    </div>
                    <div className="space-y-3">
                       <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                         <span>Доходность (%)</span>
+                         <span>Доход (%)</span>
                          <span className="text-emerald-500 italic">{Math.round(yieldRate * 100)}%</span>
                       </div>
                       <input type="range" min="0" max="0.50" step="0.01" value={yieldRate} onChange={(e) => setYieldRate(parseFloat(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
-                   </div>
-                </div>
-              </div>
-
-              {/* Анализ расходов за 6 месяцев */}
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-100 space-y-6 shadow-sm mx-1 relative overflow-hidden">
-                <div className="flex justify-between items-center">
-                  <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Средний расход (6 мес.)</h5>
-                  <button onClick={() => setShowFormulaInfo(showFormulaInfo === 'average' ? null : 'average')} className="w-5 h-5 rounded-full border border-slate-200 flex items-center justify-center text-[8px] text-slate-400"><i className="fa-solid fa-info"></i></button>
-                </div>
-                
-                {showFormulaInfo === 'average' && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-[9px] font-bold text-slate-500 uppercase italic animate-fade-in">
-                    Мы взяли все твои траты за последние полгода и разделили их на 6. Это твоя реальная "стоимость жизни" в месяц.
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                   <div className="flex justify-between items-center">
-                      <span className="text-sm font-bold text-slate-600 uppercase tracking-tighter italic">Расходы + Подписки:</span>
-                      <span className="text-xl font-black italic text-indigo-600">{formatVal(averageMonthlyBurn)}</span>
-                   </div>
-                   <div className="h-px bg-slate-50 my-2"></div>
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-3 bg-slate-50 rounded-2xl">
-                         <span className="text-[7px] font-black text-slate-300 uppercase block mb-1">За полгода</span>
-                         <span className="text-xs font-black italic">{formatVal(averageMonthlyBurn * 6)}</span>
-                      </div>
-                      <div className="text-center p-3 bg-slate-50 rounded-2xl">
-                         <span className="text-[7px] font-black text-slate-300 uppercase block mb-1">За год</span>
-                         <span className="text-xs font-black italic">{formatVal(averageMonthlyBurn * 12)}</span>
-                      </div>
                    </div>
                 </div>
               </div>

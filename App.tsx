@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useStore } from './store/useStore';
-import { AppView, YearGoal } from './types';
+import { AppView, YearGoal, ProgressLog } from './types';
 import { Layout } from './components/Layout';
 import { GoalWizard } from './components/GoalWizard';
 import { DashboardView } from './components/DashboardView';
@@ -53,6 +53,11 @@ const App: React.FC = () => {
     if (updated) setSelectedGoal(updated);
     setGeneratingVision(false);
   };
+
+  const goalLogs = useMemo(() => {
+    if (!selectedGoal) return [];
+    return [...(selectedGoal.logs || [])].reverse();
+  }, [selectedGoal]);
 
   if (store.view === AppView.LANDING) {
     return (
@@ -180,6 +185,61 @@ const App: React.FC = () => {
                          </div>
                       </div>
                     ))}
+                 </div>
+              </div>
+
+              {/* Feed of Social Proof (Tribe Feed) */}
+              <div className="space-y-4">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 italic">Фид Племени (Social Proof)</h4>
+                 <div className="space-y-4">
+                    {goalLogs.length === 0 ? (
+                       <div className="p-10 text-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
+                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Активности пока нет</p>
+                       </div>
+                    ) : goalLogs.map(log => {
+                      const verifier = store.partners.find(p => p.id === log.verified_by);
+                      return (
+                        <div key={log.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm space-y-3">
+                           <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-2">
+                                 {log.is_verified ? (
+                                    <div className="flex items-center gap-2">
+                                       <img src={verifier?.avatar || `https://i.pravatar.cc/150?u=${log.verified_by}`} className="w-8 h-8 rounded-xl object-cover" />
+                                       <div>
+                                          <span className="text-[10px] font-black text-slate-800 uppercase italic block">{verifier?.name || 'Племя'}</span>
+                                          <span className="text-[8px] font-black text-emerald-500 uppercase italic">Верифицировано</span>
+                                       </div>
+                                    </div>
+                                 ) : (
+                                    <div className="flex items-center gap-2 opacity-50">
+                                       <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400"><i className="fa-solid fa-clock"></i></div>
+                                       <div>
+                                          <span className="text-[10px] font-black text-slate-400 uppercase italic block">Твой отчет</span>
+                                          <span className="text-[8px] font-black text-slate-300 uppercase italic">Ожидание пруфа</span>
+                                       </div>
+                                    </div>
+                                 )}
+                              </div>
+                              <div className="text-right">
+                                 <span className="text-xs font-black italic text-slate-800">+{log.value} {selectedGoal.metric}</span>
+                                 <span className="text-[8px] font-black text-slate-300 uppercase block italic">{new Date(log.timestamp).toLocaleDateString()}</span>
+                              </div>
+                           </div>
+                           
+                           {(log.rating || log.comment) && (
+                              <div className="mt-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 relative">
+                                 <div className="absolute -top-2 left-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-slate-100"></div>
+                                 <div className="flex gap-1 mb-2">
+                                    {Array.from({length: 5}).map((_, i) => (
+                                       <i key={i} className={`fa-solid fa-star text-[7px] ${i < (log.rating || 0) ? 'text-amber-400' : 'text-slate-200'}`}></i>
+                                    ))}
+                                 </div>
+                                 {log.comment && <p className="text-[11px] font-bold text-slate-600 leading-relaxed italic">"{log.comment}"</p>}
+                              </div>
+                           )}
+                        </div>
+                      );
+                    })}
                  </div>
               </div>
            </div>

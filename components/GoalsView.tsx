@@ -25,6 +25,13 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onAddGoal, onSelect
     return { label: 'ТОЛЬКО СТАРТ', color: 'bg-slate-200 text-slate-500' };
   };
 
+  const getAverageRating = (goal: YearGoal) => {
+    const logsWithRating = (goal.logs || []).filter(l => l.rating !== undefined);
+    if (logsWithRating.length === 0) return 0;
+    const sum = logsWithRating.reduce((acc, l) => acc + (l.rating || 0), 0);
+    return parseFloat((sum / logsWithRating.length).toFixed(1));
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       <header className="flex justify-between items-end px-2">
@@ -52,6 +59,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onAddGoal, onSelect
       <div className="space-y-4">
         {filteredGoals.map(goal => {
           const status = getStatusBadge(goal);
+          const avgRating = getAverageRating(goal);
           const totalPct = Math.min(100, (goal.current_value / (goal.target_value || 1)) * 100);
           const verifiedPct = Math.min(100, ((goal.logs?.filter(l => l.is_verified).reduce((a, b) => a + b.value, 0) || 0) / (goal.target_value || 1)) * 100);
 
@@ -67,7 +75,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onAddGoal, onSelect
                     <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{goal.category}</span>
                     <div className="flex gap-0.5">
                        {[1,2,3,4,5].map(s => (
-                         <i key={s} className={`fa-solid fa-star text-[7px] ${s <= 4 ? 'text-amber-400' : 'text-slate-100'}`}></i>
+                         <i key={s} className={`fa-solid fa-star text-[7px] ${s <= Math.round(avgRating || 4) ? 'text-amber-400' : 'text-slate-100'}`}></i>
                        ))}
                     </div>
                   </div>
@@ -86,7 +94,7 @@ export const GoalsView: React.FC<GoalsViewProps> = ({ goals, onAddGoal, onSelect
                   <div style={{ width: `${verifiedPct}%` }} className="absolute inset-y-0 left-0 bg-indigo-600 transition-all duration-1000"></div>
                 </div>
                 <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest italic opacity-70">
-                   <span>Оценка племени: 4.2 / 5</span>
+                   <span>Оценка племени: {avgRating > 0 ? avgRating : '—'} / 5</span>
                    <span className="text-slate-400">Прогресс: {goal.current_value} {goal.metric}</span>
                 </div>
               </div>

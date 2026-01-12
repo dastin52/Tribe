@@ -112,6 +112,8 @@ export interface ProgressLog {
   is_verified?: boolean;
   verified_by?: string;
   user_id: string;
+  comment?: string;
+  rating?: number;
 }
 
 export interface YearGoal {
