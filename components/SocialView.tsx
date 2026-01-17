@@ -58,17 +58,17 @@ const PlayerCard: React.FC<{ p: GamePlayer }> = ({ p }) => {
 
   return (
     <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isReady ? 'border-emerald-500 shadow-emerald-500/20' : 'border-white/10'}`}>
-      <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 relative ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
+      <div className={`w-20 h-20 rounded-[1.8rem] overflow-hidden border-2 relative ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
         <img src={avatarUrl} className="w-full h-full object-cover" onError={() => setImgError(true)} />
         {p.isBot && <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-white italic tracking-tighter uppercase backdrop-blur-[1px]">AI</div>}
       </div>
       <div className="text-center">
-        <span className="font-black italic uppercase text-[10px] text-white block truncate w-24">{p.name}</span>
+        <span className="font-black italic uppercase text-[12px] text-white block truncate w-24">{p.name}</span>
         <div className="flex items-center justify-center gap-1 mt-1">
-          {p.isReady ? <span className="text-[7px] font-black uppercase text-emerald-400">ГОТОВ</span> : <span className="text-[7px] font-black uppercase text-slate-500">ЖДЕМ...</span>}
+          {p.isReady ? <span className="text-[8px] font-black uppercase text-emerald-400 tracking-widest">ГОТОВ</span> : <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest">ЖДЕМ...</span>}
         </div>
       </div>
-      {p.isReady && <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] text-white shadow-lg"><i className="fa-solid fa-check"></i></div>}
+      {p.isReady && <div className="absolute top-2 right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-[11px] text-white shadow-lg"><i className="fa-solid fa-check"></i></div>}
     </div>
   );
 };
@@ -82,7 +82,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   
   const players = gameState?.players || [];
-  const currentPlayer = players[gameState?.currentPlayerIndex || 0];
+  const currentPlayer = players[gameState?.currentPlayerIndex || 0] || null;
   const isMyTurn = currentPlayer?.id === currentUserId;
   const me = players.find(p => p.id === currentUserId);
 
@@ -108,11 +108,11 @@ export const SocialView: React.FC<SocialViewProps> = ({
     try { await startGame(); } finally { setTimeout(() => setIsSyncing(false), 1000); }
   };
 
-  if (!gameState || !players.length) {
+  if (!gameState || (!players.length && gameState.status === 'playing')) {
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Синхронизация с племенем...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Входим в поток...</p>
       </div>
     );
   }
@@ -124,7 +124,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.2),transparent)]"></div>
           <div className="relative z-10 text-center space-y-4 w-full">
             <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto border-4 border-white/10 animate-pulse"><i className="fa-solid fa-users-rays text-white"></i></div>
-            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter">ЗАЛ ОЖИДАНИЯ</h2>
+            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none">ЗАЛ<br/>ОЖИДАНИЯ</h2>
             <div className="bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/30 flex items-center gap-2 mx-auto w-fit"><span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span></div>
           </div>
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
@@ -137,19 +137,15 @@ export const SocialView: React.FC<SocialViewProps> = ({
             )}
           </div>
           <div className="w-full space-y-4 pt-4 relative z-10">
-            <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
+            <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
             <button onClick={handleToggleReady} disabled={isSyncing} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${me?.isReady ? 'bg-emerald-500 text-white shadow-emerald-500/40' : 'bg-white text-slate-900 shadow-white/10'}`}>
               {isSyncing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : me?.isReady ? <i className="fa-solid fa-clock-rotate-left"></i> : <i className="fa-solid fa-check-double"></i>}
               {isSyncing ? 'СИНХРОНИЗАЦИЯ...' : me?.isReady ? 'ЖДЕМ ОСТАЛЬНЫХ' : 'Я ГОТОВ'}
             </button>
           </div>
-        </div>
-        <div className="bg-white border-2 border-slate-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
-           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic px-2">Если ссылка не сработала:</h3>
-           <div className="flex gap-2">
-              <input type="text" placeholder="КОД ЛОББИ..." maxLength={6} value={manualCode} onChange={e => setManualCode(e.target.value.toUpperCase())} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-sm uppercase tracking-widest outline-none focus:border-indigo-500 transition-all" />
-              <button onClick={() => { joinLobbyManual(manualCode); setManualCode(''); }} disabled={manualCode.length < 4} className="px-6 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-20">ВХОД</button>
-           </div>
+          <div className="relative z-10 text-[9px] font-bold text-slate-500 uppercase tracking-widest italic text-center px-4">
+             Нажмите «Готов», чтобы начать (минимум 2 игрока).
+          </div>
         </div>
       </div>
     );
@@ -181,7 +177,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
               <div className="relative">
                 <img src={p.avatar} className={`w-12 h-12 rounded-2xl object-cover border-2 ${gameState.currentPlayerIndex === idx ? 'border-indigo-400 shadow-md' : 'border-slate-200 grayscale opacity-60'}`} onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
                 {gameState.currentPlayerIndex === idx && <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-ping"></div>}
-                {p.isBot && <div className="absolute -bottom-1 -left-1 px-1 bg-indigo-600 rounded text-[6px] font-black text-white italic">AI</div>}
               </div>
               <div className="text-left"><span className="text-[11px] font-black uppercase italic block truncate w-16">{p.name}</span><span className={`text-[9px] font-black ${gameState.currentPlayerIndex === idx ? 'text-indigo-600' : 'text-slate-400'}`}>{Math.round(p.cash || 0).toLocaleString()} XP</span></div>
             </div>
@@ -211,32 +206,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
            <button disabled={!isMyTurn || !!gameState.lastRoll} onClick={() => rollDice(BOARD)} className="w-full py-7 bg-white text-slate-950 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.5em] shadow-[0_20px_50px_rgba(255,255,255,0.2)] active:scale-95 transition-all disabled:opacity-5 flex items-center justify-center gap-5"><i className="fa-solid fa-dice text-2xl"></i> БРОСОК</button>
         </div>
       </div>
-      
-      <div className="px-5 space-y-4 pb-12">
-        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic px-2">Хроника Племени</h3>
-        <div className="space-y-3">
-          {(gameState.history || []).map((log, i) => (
-            <div key={i} className={`p-5 rounded-[1.8rem] border-2 text-[10px] font-bold italic transition-all ${i === 0 ? 'bg-indigo-600 text-white shadow-xl border-indigo-400 scale-[1.02]' : log.includes('⚡️') ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white text-slate-400 border-slate-100 opacity-70'}`}>{log}</div>
-          ))}
-        </div>
-      </div>
-
-      {selectedCell && (
-        <div className="fixed inset-0 z-[1500] flex items-end p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedCell(null)}>
-           <div className="w-full p-10 bg-white rounded-[4rem] shadow-2xl space-y-8 animate-slide-up" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-start">
-                 <div className="flex items-center gap-6"><div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-3xl shadow-2xl"><i className={`fa-solid ${selectedCell.icon}`}></i></div><div><h4 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{selectedCell.title}</h4><span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mt-3 italic">{selectedCell.district || 'Узел событий'}</span></div></div>
-                 <button onClick={() => setSelectedCell(null)} className="w-12 h-12 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center transition-colors hover:bg-slate-100"><i className="fa-solid fa-xmark text-xl"></i></button>
-              </div>
-              {selectedCell.type === 'asset' ? (
-                <div className="space-y-8">
-                  <div className="grid grid-cols-2 gap-5"><div className="p-7 bg-slate-50 rounded-[2.5rem] border-2 border-slate-100"><span className="text-[9px] font-black text-slate-400 uppercase block mb-2 italic tracking-widest">СТОИМОСТЬ</span><span className="text-2xl font-black italic">{selectedCell.cost?.toLocaleString()} XP</span></div><div className="p-7 bg-indigo-50 rounded-[2.5rem] border-2 border-indigo-100"><span className="text-[9px] font-black text-indigo-400 uppercase block mb-2 italic tracking-widest">ДОХОД</span><span className="text-2xl font-black text-indigo-700 italic">{selectedCell.rent?.toLocaleString()} XP</span></div></div>
-                  {isMyTurn && currentPlayer?.position === selectedCell.id && !gameState.ownedAssets[selectedCell.id] ? (<button onClick={() => { buyAsset(selectedCell.id, BOARD); setSelectedCell(null); }} className="w-full py-7 bg-slate-900 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all">ЗАХВАТИТЬ СЕКТОР</button>) : (<div className="p-8 bg-slate-50 rounded-[2.5rem] text-center italic text-[11px] font-black text-slate-400 uppercase tracking-widest border-2 border-dashed border-slate-200">{gameState.ownedAssets[selectedCell.id] ? 'СЕКТОР ПОД КОНТРОЛЕМ' : 'НУЖЕН ТВОЙ ХОД НА ЭТУ КЛЕТКУ'}</div>)}
-                </div>
-              ) : <div className="p-12 bg-slate-50 rounded-[3rem] text-center italic text-slate-400 text-sm border-2 border-dashed border-slate-100">Узел активностей. Активируется при попадании игрока...</div>}
-           </div>
-        </div>
-      )}
     </div>
   );
 };

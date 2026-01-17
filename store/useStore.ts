@@ -18,17 +18,18 @@ export function useStore() {
   const [partners, setPartners] = useState(SAMPLE_PARTNERS);
   const [transactions, setTransactions] = useState<Transaction[]>(SAMPLE_TRANSACTIONS);
   
-  const [gameState, setGameState] = useState<GameState>({
+  // Инициализируем lobbyId сразу, чтобы избежать пустых полей в UI
+  const [gameState, setGameState] = useState<GameState>(() => ({
     players: [],
     currentPlayerIndex: 0,
-    history: ["Инициализация..."],
+    history: ["Инициализация системы..."],
     turnNumber: 1,
     ownedAssets: {},
     reactions: [],
-    lobbyId: null,
+    lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase(),
     status: 'lobby',
     lastRoll: null
-  });
+  }));
 
   const isSyncingRef = useRef(false);
   const lastStateHash = useRef("");
@@ -53,10 +54,12 @@ export function useStore() {
     } catch (e) {
       console.error("Sync error:", e);
     } finally {
+      // Защита от слишком частых запросов
       setTimeout(() => { isSyncingRef.current = false; }, 1000);
     }
   };
 
+  // Telegram интеграция
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
@@ -70,21 +73,19 @@ export function useStore() {
           photo_url: u.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.first_name)}&background=6366f1&color=fff`
         }));
       }
+      
       const startParam = tg.initDataUnsafe?.start_param || tg.initDataUnsafe?.start_query;
       if (startParam) {
         setGameState(prev => ({ ...prev, lobbyId: startParam.toUpperCase() }));
         setView(AppView.SOCIAL);
       }
     }
-    
-    setGameState(prev => {
-      if (!prev.lobbyId) return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
-      return prev;
-    });
   }, []);
 
+  // Регистрация в лобби
   useEffect(() => {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
+    
     const me: GamePlayer = {
       id: user.id,
       name: user.name,
@@ -96,11 +97,13 @@ export function useStore() {
       deposits: [],
       ownedAssets: [],
     };
+    
     syncWithServer({ player: me });
   }, [user.id, gameState.lobbyId]);
 
-  // ОПТИМИЗИРОВАННЫЙ ПОЛЛИНГ: только в SOCIAL и реже (5с)
+  // ОПТИМИЗИРОВАННЫЙ ПОЛЛИНГ (Экономия KV)
   useEffect(() => {
+    // Не опрашиваем, если мы не во вкладке игры
     if (!gameState.lobbyId || view !== AppView.SOCIAL) return;
     
     const fetchLobby = async () => {
@@ -113,27 +116,32 @@ export function useStore() {
         if (hash !== lastStateHash.current) {
           lastStateHash.current = hash;
           setGameState(prev => {
-            if (prev.status === 'playing' && data.status === 'lobby') return prev;
-            if (prev.lastRoll) return prev;
+            // Не перетираем локальные анимации кубика
+            if (prev.lastRoll && !data.lastRoll) return prev;
             return data;
           });
         }
       } catch (e) {}
     };
 
-    fetchLobby(); // Сразу при входе в SOCIAL
-    const interval = setInterval(fetchLobby, 5000);
+    const interval = setInterval(fetchLobby, 6000); // 6 секунд для экономии лимитов
+    fetchLobby(); // Первый запрос сразу
+
     return () => clearInterval(interval);
   }, [gameState.lobbyId, view]);
 
   const toggleReady = async () => {
     const me = gameState.players.find(p => p.id === user.id);
     if (!me) return;
+    
     const newReady = !me.isReady;
+    
+    // Оптимистичный UI
     setGameState(prev => ({
       ...prev,
       players: prev.players.map(p => p.id === user.id ? { ...p, isReady: newReady } : p)
     }));
+
     await syncWithServer({ 
       player: { id: user.id, isReady: newReady, avatar: user.photo_url || "" } 
     });
@@ -143,6 +151,7 @@ export function useStore() {
     if (gameState.players.length >= 4) return;
     const botNames = ["Крипто-Волк", "Инвестор-Тень", "Машина-Роста", "Бот-Аскет"];
     const name = botNames[Math.floor(Math.random() * botNames.length)];
+    
     const botData = {
       name: name,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
@@ -154,30 +163,35 @@ export function useStore() {
       deposits: [],
       ownedAssets: [],
     };
+
     await syncWithServer({ addBot: botData });
   };
 
   const rollDice = async (board: BoardCell[]) => {
-    if (gameState.lastRoll) return;
+    if (gameState.lastRoll || gameState.status !== 'playing') return;
+    
     const roll = Math.floor(Math.random() * 6) + 1;
     setGameState(prev => ({ ...prev, lastRoll: roll }));
+    
     setTimeout(async () => {
       setGameState(prev => {
         const currentPlayer = prev.players[prev.currentPlayerIndex];
         if (!currentPlayer) return { ...prev, lastRoll: null };
+        
         const newPos = (currentPlayer.position + roll) % BOARD_CELLS_COUNT;
         const cell = board[newPos];
-        let newPlayers = [...prev.players];
-        let newHistory = [`${currentPlayer.name} выбросил ${roll} и зашел на ${cell.title}`, ...prev.history];
-        const standardUpdate = {
-          players: newPlayers.map((p, i) => i === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
+        let newHistory = [`🎲 ${currentPlayer.name} выбросил ${roll}: ${cell.title}`, ...prev.history];
+        
+        const update = {
+          players: prev.players.map((p, i) => i === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
           lastRoll: null,
           currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
           turnNumber: prev.turnNumber + 1,
           history: newHistory.slice(0, 20)
         };
-        syncWithServer({ gameStateUpdate: standardUpdate });
-        return { ...prev, ...standardUpdate };
+        
+        syncWithServer({ gameStateUpdate: update });
+        return { ...prev, ...update };
       });
     }, 2000);
   };
@@ -186,21 +200,14 @@ export function useStore() {
     const playerIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
     const player = gameState.players[playerIdx];
     const cell = board[cellId];
+    
     if (player && player.cash >= (cell.cost || 0) && !gameState.ownedAssets[cellId]) {
       const update = {
         ownedAssets: { ...gameState.ownedAssets, [cellId]: player.id },
         players: gameState.players.map((p, idx) => idx === playerIdx ? { ...p, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, cellId] } : p),
-        history: [`💎 ${player.name} инвестировал в ${cell.title}!`, ...gameState.history].slice(0, 20)
+        history: [`💎 ${player.name} купил ${cell.title}!`, ...gameState.history].slice(0, 20)
       };
       await syncWithServer({ gameStateUpdate: update });
-    }
-  };
-
-  const joinLobbyManual = (code: string) => {
-    const formattedCode = code.trim().toUpperCase();
-    if (formattedCode.length >= 4) {
-      setGameState(prev => ({ ...prev, lobbyId: formattedCode, players: [], status: 'lobby' }));
-      setView(AppView.SOCIAL);
     }
   };
 
@@ -208,20 +215,26 @@ export function useStore() {
     const tg = (window as any).Telegram?.WebApp;
     const lobbyId = gameState.lobbyId;
     if (!lobbyId) return;
+
+    // ВАЖНО: имя бота должно быть правильным
     const botUser = "tribe_goals_bot"; 
     const inviteUrl = `https://t.me/${botUser}?start=${lobbyId}`;
-    const shareText = `Присоединяйся к моей игре в Tribe Arena! 🚀\nКод лобби: ${lobbyId}`;
+    const shareText = `Входи в моё племя Tribe Arena! 🚀\nКод: ${lobbyId}`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
-    if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl);
-    else {
+    
+    if (tg && tg.openTelegramLink) {
+      tg.HapticFeedback?.impactOccurred('medium');
+      tg.openTelegramLink(shareUrl);
+    } else {
       navigator.clipboard.writeText(inviteUrl);
-      alert(`Ссылка скопирована!`);
+      alert(`Ссылка скопирована: ${inviteUrl}`);
     }
   }, [gameState.lobbyId]);
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
-    rollDice, buyAsset, generateInviteLink, toggleReady, joinLobbyManual, addBot,
+    rollDice, buyAsset, generateInviteLink, toggleReady, addBot,
+    joinLobbyManual: (code: string) => { setGameState(prev => ({ ...prev, lobbyId: code.toUpperCase() })); setView(AppView.SOCIAL); },
     joinFakePlayer: addBot,
     createDeposit: () => {}, 
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
