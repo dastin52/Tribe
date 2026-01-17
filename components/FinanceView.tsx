@@ -3,65 +3,51 @@ import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts';
 import { Transaction, Debt, Subscription, FinancialSnapshot, YearGoal } from '../types';
 import { geminiService } from '../services/gemini';
-
-interface FinanceViewProps {
-  financials: FinancialSnapshot;
-  transactions: Transaction[];
-  debts: Debt[];
-  subscriptions: Subscription[];
-  balanceVisible: boolean;
-  setBalanceVisible: (v: boolean) => void;
-  netWorth: number;
-  balanceHistory: any[];
-  onAddTransaction: (amount: number, type: 'income' | 'expense', category: string, note?: string, goal_id?: string) => void;
-  onAddDebt: (debt: Omit<Debt, 'id'>) => void;
-  onAddSubscription: (sub: Omit<Subscription, 'id'>) => void;
-  goals: YearGoal[];
-}
+// Fix: Import GoogleGenAI from @google/genai
+import { GoogleGenAI } from "@google/genai";
 
 const EXPENSE_CATEGORIES = ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Одежда', 'Связь', 'Подписки', 'Налоги', 'Другое'];
+
+// Fix: Defined missing freedomLevels constant for the planning view
+const freedomLevels = [
+  { id: 'safety', title: 'Безопасность', target: 600000, desc: '6 месяцев жизни', icon: 'fa-shield-heart', color: 'text-blue-400' },
+  { id: 'stability', title: 'Стабильность', target: 5000000, desc: 'Закрытые базы', icon: 'fa-building-columns', color: 'text-indigo-400' },
+  { id: 'independence', title: 'Независимость', target: 25000000, desc: 'Доход покрывает жизнь', icon: 'fa-anchor', color: 'text-emerald-400' },
+  { id: 'fuck-you', title: 'Да пошёл ты!', target: 100000000, desc: 'Полная свобода', icon: 'fa-crown', color: 'text-rose-400' },
+];
+
+interface BudgetCategory {
+  name: string;
+  percent: number;
+  group: 'essential' | 'dreams' | 'invest';
+  realCategory?: string;
+}
 
 export const FinanceView: React.FC<FinanceViewProps> = ({ 
   financials, transactions, debts, subscriptions, balanceVisible, setBalanceVisible, netWorth, balanceHistory, onAddTransaction, onAddDebt, onAddSubscription, goals 
 }) => {
   const [activeTab, setActiveTab] = useState<'operations' | 'debts' | 'subscriptions' | 'planning'>('operations');
   const [isAdding, setIsAdding] = useState(false);
-  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [showPlanner, setShowPlanner] = useState(false);
+  const [aiBudgetAdvice, setAiBudgetAdvice] = useState<string | null>(null);
   const [loadingAdvice, setLoadingAdvice] = useState(false);
-  
-  const [targetYears, setTargetYears] = useState(10);
-  const [inflationRate, setInflationRate] = useState(0.08);
-  const [yieldRate, setYieldRate] = useState(0.12);
-  const [showCompound, setShowCompound] = useState(false);
-  const [showFormulaInfo, setShowFormulaInfo] = useState<string | null>(null);
 
-  const [amount, setAmount] = useState('');
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
-  const [type, setType] = useState<'income' | 'expense'>('expense');
-  const [debtType, setDebtType] = useState<'i_owe' | 'they_owe'>('i_owe');
+  // Состояние планировщика
+  const [plannedIncome, setPlannedIncome] = useState(financials.monthly_income || 170000);
+  const [budgetStructure, setBudgetStructure] = useState<BudgetCategory[]>([
+    { name: 'Аренда/Ипотека', percent: 25, group: 'essential', realCategory: 'Жилье' },
+    { name: 'Продукты', percent: 10, group: 'essential', realCategory: 'Продукты' },
+    { name: 'Транспорт', percent: 3, group: 'essential', realCategory: 'Транспорт' },
+    { name: 'Связь/Подписки', percent: 2, group: 'essential', realCategory: 'Связь' },
+    { name: 'Покупки', percent: 15, group: 'dreams', realCategory: 'Одежда' },
+    { name: 'Развлечения', percent: 15, group: 'dreams', realCategory: 'Развлечения' },
+    { name: 'Подушка', percent: 20, group: 'invest' },
+    { name: 'Фондовый рынок', percent: 10, group: 'invest' },
+  ]);
 
-  // Fix: Added missing calculations for iOweTotal, theyOweTotal, and totalMonthlySubs
-  const iOweTotal = useMemo(() => 
-    debts.filter(d => d.type === 'i_owe').reduce((acc, d) => acc + d.remaining_amount, 0), 
-  [debts]);
-
-  const theyOweTotal = useMemo(() => 
-    debts.filter(d => d.type === 'they_owe').reduce((acc, d) => acc + d.remaining_amount, 0), 
-  [debts]);
-
-  const totalMonthlySubs = useMemo(() => 
-    subscriptions.reduce((acc, s) => acc + (s.period === 'monthly' ? s.amount : s.amount / 12), 0), 
-  [subscriptions]);
-
-  const averageMonthlyBurn = useMemo(() => {
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const relevantExpenses = transactions.filter(t => t.type === 'expense' && new Date(t.timestamp) >= sixMonthsAgo);
-    const subsTotal = subscriptions.reduce((acc, s) => acc + s.amount, 0);
-    if (relevantExpenses.length === 0) return (financials.monthly_expenses || 0) + subsTotal;
-    return (relevantExpenses.reduce((acc, t) => acc + t.amount, 0) / 6) + subsTotal;
-  }, [transactions, subscriptions, financials.monthly_expenses]);
+  const iOweTotal = useMemo(() => debts.filter(d => d.type === 'i_owe').reduce((acc, d) => acc + d.remaining_amount, 0), [debts]);
+  const theyOweTotal = useMemo(() => debts.filter(d => d.type === 'they_owe').reduce((acc, d) => acc + d.remaining_amount, 0), [debts]);
+  const totalMonthlySubs = useMemo(() => subscriptions.reduce((acc, s) => acc + (s.period === 'monthly' ? s.amount : s.amount / 12), 0), [subscriptions]);
 
   const currentMonthStats = useMemo(() => {
     const now = new Date();
@@ -71,99 +57,44 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       const d = new Date(t.timestamp);
       return d.getMonth() === curMonth && d.getFullYear() === curYear;
     });
+    
+    // Группировка трат по категориям для планировщика
+    const categoryTotals: Record<string, number> = {};
+    filtered.forEach(t => {
+      if (t.type === 'expense') {
+        categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+      }
+    });
+
     const income = filtered.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
     const expense = filtered.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
-    return { income, expense };
+    return { income, expense, categoryTotals };
   }, [transactions]);
 
-  const realYield = Math.max(0.01, yieldRate - inflationRate);
-  const passiveCapitalGoal = (averageMonthlyBurn * 12) / realYield;
-  
-  const inflationAdjustedTotal = useMemo(() => {
-    let total = 0;
-    let annualExpense = averageMonthlyBurn * 12;
-    for (let i = 1; i <= targetYears; i++) {
-      total += annualExpense * Math.pow(1 + inflationRate, i);
-    }
-    return total;
-  }, [averageMonthlyBurn, targetYears, inflationRate]);
-
-  const compoundData = useMemo(() => {
-    let current = netWorth;
-    const history = [];
-    for (let i = 0; i <= targetYears; i++) {
-      history.push({ year: i, balance: Math.round(current) });
-      current = current * (1 + yieldRate);
-    }
-    return history;
-  }, [netWorth, yieldRate, targetYears]);
-
-  const freedomIndex = Math.round((netWorth / passiveCapitalGoal) * 100);
   const formatVal = (val: number) => balanceVisible ? `${Math.round(val).toLocaleString()} ${financials.currency}` : `∗∗∗ ${financials.currency}`;
 
-  // РАСЧЕТ УРОВНЕЙ СВОБОДЫ
-  const freedomLevels = useMemo(() => {
-    const burn = averageMonthlyBurn;
-    return [
-      {
-        id: 'L1',
-        title: 'Спасательный жилет',
-        desc: '6 месяцев жизни в запасе',
-        target: burn * 6,
-        icon: 'fa-life-ring',
-        color: 'text-blue-500'
-      },
-      {
-        id: 'L2',
-        title: 'Твердая почва',
-        desc: '2 года жизни без долгов',
-        target: burn * 24,
-        icon: 'fa-anchor',
-        color: 'text-emerald-500'
-      },
-      {
-        id: 'L3',
-        title: 'Автономия',
-        desc: 'Пассивный доход = База',
-        target: passiveCapitalGoal,
-        icon: 'fa-leaf',
-        color: 'text-indigo-500'
-      },
-      {
-        id: 'L4',
-        title: 'Цифровой Кочевник',
-        desc: 'Любая точка мира (2x База)',
-        target: passiveCapitalGoal * 2,
-        icon: 'fa-plane-departure',
-        color: 'text-violet-500'
-      },
-      {
-        id: 'L5',
-        title: '«Да пошёл ты!»',
-        desc: '100М + Дом + Машина',
-        target: 100000000,
-        icon: 'fa-fort-awesome',
-        color: 'text-rose-600',
-        special: true
-      }
-    ];
-  }, [averageMonthlyBurn, passiveCapitalGoal]);
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl shadow-2xl">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic leading-none">{formatVal(payload[0].value)}</p>
-        </div>
-      );
-    }
-    return null;
+  const handleUpdatePercent = (index: number, val: string) => {
+    const newBudget = [...budgetStructure];
+    newBudget[index].percent = parseInt(val) || 0;
+    setBudgetStructure(newBudget);
   };
 
-  const handleGetAdvice = async () => {
+  // Fix: Fixed GoogleGenAI initialization and text property access following @google/genai guidelines
+  const handleOptimizeBudget = async () => {
     setLoadingAdvice(true);
-    const advice = await geminiService.getFinanceAdvice(transactions, goals);
-    setAiAdvice(advice);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const budgetContext = budgetStructure.map(b => `${b.name}: план ${b.percent}%, факт ${currentMonthStats.categoryTotals[b.realCategory || ''] || 0} руб`).join(', ');
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Проанализируй бюджет: Доход ${plannedIncome}. Структура: ${budgetContext}. 
+        Найди перерасходы и скажи кратко (до 30 слов), как перенаправить деньги в Инвестиции, чтобы быстрее достичь целей.`,
+      });
+      // Fix: Access .text property directly (not a method)
+      setAiBudgetAdvice(response.text);
+    } catch (e) {
+      setAiBudgetAdvice("Попробуйте сократить необязательные покупки и направить 5% дохода в подушку безопасности.");
+    }
     setLoadingAdvice(false);
   };
 
@@ -191,6 +122,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       <div className="px-1 space-y-6">
         {activeTab === 'operations' && (
           <div className="space-y-6 animate-fade-in">
+            {/* Карточка баланса */}
             <div className="bg-[#0f172a] rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden mx-1">
                <div className="absolute top-10 right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Общий капитал</span>
@@ -199,11 +131,115 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   <ResponsiveContainer width="100%" height="100%">
                      <AreaChart data={balanceHistory} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                         <defs><linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#818cf8" stopOpacity={0.4}/><stop offset="95%" stopColor="#818cf8" stopOpacity={0}/></linearGradient></defs>
-                        <Tooltip content={<CustomTooltip />} />
+                        <Tooltip />
                         <Area type="monotone" dataKey="balance" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#colorNet)" />
                      </AreaChart>
                   </ResponsiveContainer>
                </div>
+            </div>
+
+            {/* ПЛАНИРОВЩИК БЮДЖЕТА (Раскрывающийся) */}
+            <div className="mx-1 overflow-hidden border border-slate-100 rounded-[2.5rem] bg-white shadow-sm transition-all">
+              <button 
+                onClick={() => setShowPlanner(!showPlanner)}
+                className="w-full p-6 flex justify-between items-center group active:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                   <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                      <i className="fa-solid fa-calculator"></i>
+                   </div>
+                   <div className="text-left">
+                      <h3 className="font-black text-xs uppercase italic text-slate-800">Планировщик 50/30/20</h3>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Контроль расходов по целям</p>
+                   </div>
+                </div>
+                <i className={`fa-solid fa-chevron-down text-slate-300 transition-transform duration-500 ${showPlanner ? 'rotate-180' : ''}`}></i>
+              </button>
+
+              {showPlanner && (
+                <div className="px-6 pb-8 space-y-8 animate-fade-in">
+                  <div className="p-5 bg-indigo-50 rounded-[2rem] border border-indigo-100 flex justify-between items-center">
+                     <div>
+                        <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1">Планируемый доход</span>
+                        <input 
+                          type="number" 
+                          value={plannedIncome}
+                          onChange={e => setPlannedIncome(parseInt(e.target.value) || 0)}
+                          className="bg-transparent text-xl font-black text-indigo-900 outline-none w-32 border-b-2 border-indigo-200 focus:border-indigo-600 transition-colors"
+                        />
+                     </div>
+                     <div className="text-right">
+                        <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1">Распределено</span>
+                        <span className="text-xl font-black text-indigo-900 italic">
+                          {budgetStructure.reduce((acc, b) => acc + b.percent, 0)}%
+                        </span>
+                     </div>
+                  </div>
+
+                  {/* Группы бюджета */}
+                  {(['essential', 'dreams', 'invest'] as const).map(group => (
+                    <div key={group} className="space-y-3">
+                       <h4 className={`text-[10px] font-black uppercase tracking-widest italic px-2 ${group === 'essential' ? 'text-amber-600' : group === 'dreams' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                         {group === 'essential' ? 'Обязательные расходы' : group === 'dreams' ? 'Желания и мечты' : 'Инвестиции и подушка'}
+                       </h4>
+                       <div className={`rounded-[2rem] overflow-hidden border ${group === 'essential' ? 'bg-amber-50/30 border-amber-100' : group === 'dreams' ? 'bg-rose-50/30 border-rose-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
+                          {budgetStructure.filter(b => b.group === group).map((item, idx) => {
+                            const index = budgetStructure.findIndex(b => b.name === item.name);
+                            const targetAmt = (plannedIncome * item.percent) / 100;
+                            const realAmt = item.realCategory ? (currentMonthStats.categoryTotals[item.realCategory] || 0) : 0;
+                            const isOverspent = realAmt > targetAmt;
+
+                            return (
+                              <div key={item.name} className="p-4 border-b last:border-0 border-white/50 flex items-center justify-between">
+                                 <div className="flex-1">
+                                    <span className="text-[9px] font-black text-slate-800 uppercase italic block">{item.name}</span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                       <span className="text-[8px] font-bold text-slate-400 uppercase italic">Факт: {realAmt.toLocaleString()} ₽</span>
+                                       {isOverspent && <span className="text-[7px] font-black text-rose-500 bg-rose-50 px-1 rounded uppercase animate-pulse">Перерасход!</span>}
+                                    </div>
+                                 </div>
+                                 <div className="flex items-center gap-3">
+                                    <div className="flex flex-col items-end">
+                                       <div className="flex items-center gap-1">
+                                          <input 
+                                            type="number" 
+                                            value={item.percent}
+                                            onChange={e => handleUpdatePercent(index, e.target.value)}
+                                            className="w-10 text-right bg-transparent font-black text-xs outline-none"
+                                          />
+                                          <span className="text-[10px] font-black text-slate-300">%</span>
+                                       </div>
+                                       <span className="text-[8px] font-black text-slate-400">{targetAmt.toLocaleString()} ₽</span>
+                                    </div>
+                                 </div>
+                              </div>
+                            );
+                          })}
+                       </div>
+                    </div>
+                  ))}
+
+                  {/* Кнопка ИИ Оптимизации */}
+                  <div className="pt-2">
+                     <button 
+                       onClick={handleOptimizeBudget}
+                       disabled={loadingAdvice}
+                       className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"
+                     >
+                       {loadingAdvice ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-wand-magic-sparkles text-indigo-400"></i>}
+                       Оптимизировать расходы
+                     </button>
+                     {aiBudgetAdvice && (
+                        <div className="mt-4 p-5 bg-indigo-50 border border-indigo-100 rounded-3xl animate-scale-up relative">
+                           <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-indigo-50 rotate-45 border-l border-t border-indigo-100"></div>
+                           <p className="text-[11px] font-bold text-indigo-800 italic leading-relaxed">
+                             "{aiBudgetAdvice}"
+                           </p>
+                        </div>
+                     )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 mx-1">
@@ -218,7 +254,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
             </div>
 
             <div className="space-y-3">
-              {transactions.slice(-10).reverse().map(tx => (
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 italic">Последние операции</h3>
+              {transactions.slice(-8).reverse().map(tx => (
                 <div key={tx.id} className="p-5 bg-white border border-slate-100 rounded-[2rem] flex justify-between items-center shadow-sm mx-1">
                    <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}><i className={`fa-solid ${tx.type === 'income' ? 'fa-arrow-trend-up' : 'fa-receipt'} text-xs`}></i></div>
@@ -242,7 +279,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 italic mb-10">Прогресс к Свободе</h4>
                  
                  <div className="space-y-8">
-                    {freedomLevels.map((level, idx) => {
+                    {freedomLevels.map((level) => {
                       const progress = Math.min(100, (netWorth / level.target) * 100);
                       const isUnlocked = netWorth >= level.target;
                       return (
@@ -262,9 +299,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
                               <div className={`h-full transition-all duration-1000 rounded-full ${isUnlocked ? 'bg-emerald-400' : 'bg-indigo-400'}`} style={{ width: `${progress}%` }}></div>
                            </div>
-                           {level.special && isUnlocked && (
-                             <div className="absolute -top-4 -right-2 rotate-12 bg-rose-600 text-white text-[6px] font-black px-2 py-1 rounded-lg uppercase tracking-widest shadow-xl">Unlocked</div>
-                           )}
                         </div>
                       )
                     })}
@@ -284,78 +318,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </div>
                     <i className="fa-solid fa-crown text-slate-200 text-3xl"></i>
                  </div>
-              </div>
-
-              {/* Настройки планирования */}
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-100 space-y-8 shadow-sm mx-1">
-                <div className="flex justify-between items-center">
-                  <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Моделирование</h5>
-                  <div className="flex gap-2">
-                     <button onClick={() => setShowCompound(false)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!showCompound ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Запас</button>
-                     <button onClick={() => setShowCompound(true)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${showCompound ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-400'}`}>Рост</button>
-                  </div>
-                </div>
-
-                {!showCompound ? (
-                  <div className="space-y-6 animate-scale-up">
-                    <div className="space-y-4">
-                       <div className="flex justify-between text-[10px] font-black uppercase text-slate-400 italic">
-                          <span>Горизонт планирования</span>
-                          <span className="text-indigo-600">{targetYears} лет</span>
-                       </div>
-                       <input type="range" min="1" max="100" step="1" value={targetYears} onChange={(e) => setTargetYears(parseInt(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                    </div>
-                    <div className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100">
-                       <span className="text-[9px] font-black text-slate-400 uppercase italic block mb-2">Накопить на срок:</span>
-                       <div className="text-xl font-black italic text-slate-900">{formatVal(inflationAdjustedTotal)}</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6 animate-scale-up">
-                    <div className="h-32 w-full">
-                       <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={compoundData}>
-                             <Tooltip content={<CustomTooltip />} />
-                             <Line type="monotone" dataKey="balance" stroke="#6366f1" strokeWidth={3} dot={false} />
-                          </LineChart>
-                       </ResponsiveContainer>
-                    </div>
-                    <div className="p-6 bg-indigo-50 rounded-[2.5rem] border border-indigo-100">
-                       <span className="text-[9px] font-black text-indigo-400 uppercase italic block mb-2">Через {targetYears} лет:</span>
-                       <div className="text-2xl font-black text-indigo-900 italic">{formatVal(compoundData[compoundData.length - 1].balance)}</div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-50">
-                   <div className="space-y-3">
-                      <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                         <span>Инфляция</span>
-                         <span className="text-rose-500 italic">{Math.round(inflationRate * 100)}%</span>
-                      </div>
-                      <input type="range" min="0" max="0.30" step="0.01" value={inflationRate} onChange={(e) => setInflationRate(parseFloat(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-rose-500" />
-                   </div>
-                   <div className="space-y-3">
-                      <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                         <span>Доход (%)</span>
-                         <span className="text-emerald-500 italic">{Math.round(yieldRate * 100)}%</span>
-                      </div>
-                      <input type="range" min="0" max="0.50" step="0.01" value={yieldRate} onChange={(e) => setYieldRate(parseFloat(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
-                   </div>
-                </div>
-              </div>
-
-              {/* Кнопка AI Анализа */}
-              <div className="p-8 bg-indigo-50 border border-indigo-100 rounded-[3.5rem] space-y-4 shadow-sm mx-1 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-200/20 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
-                <div className="flex items-center gap-3">
-                   <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xs shadow-lg"><i className="fa-solid fa-wand-magic-sparkles"></i></div>
-                   <h5 className="text-[10px] font-black uppercase tracking-widest text-indigo-900 italic">Стратегия Роста</h5>
-                </div>
-                <p className="text-[11px] font-bold text-indigo-600 leading-relaxed italic relative z-10">{aiAdvice || "Нажми кнопку для анализа динамики и сокращения пути к Свободе."}</p>
-                <button onClick={handleGetAdvice} disabled={loadingAdvice} className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all relative z-10">
-                  {loadingAdvice ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-rocket"></i>} Рассчитать План Победы
-                </button>
               </div>
            </div>
         )}
