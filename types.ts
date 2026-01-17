@@ -154,3 +154,37 @@ export enum AppView {
   SOCIAL = 'social',
   FINANCE = 'finance'
 }
+
+// Новые типы для Арены 2.0
+export type CellType = 'asset' | 'event' | 'tax' | 'start';
+export type AssetDistrict = 'tech' | 'realestate' | 'energy' | 'crypto';
+
+export interface BoardCell {
+  id: number;
+  type: CellType;
+  district?: AssetDistrict;
+  title: string;
+  cost?: number;
+  rent?: number;
+  ownerId?: string;
+  icon: string;
+}
+
+export interface GameOffer {
+  id: string;
+  fromPlayer: string;
+  assetId: number;
+  price: number;
+  status: 'pending' | 'accepted' | 'declined';
+}
+
+export interface GameState {
+  playerPosition: number;
+  cash: number;
+  ownedAssets: number[]; // id клеток
+  history: string[];
+  cards: string[]; // Названия карт влияния
+  activeOffers: GameOffer[];
+  turn: number;
+  isTutorialComplete: boolean;
+}
