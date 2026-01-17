@@ -4,15 +4,6 @@ import { User, AppView, GameState, GamePlayer, BoardCell, YearGoal, SubGoal, Tra
 import { INITIAL_USER, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_TRANSACTIONS } from './initialData';
 
 const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
-
-const EVENTS = [
-  { title: "Грант от Племени", text: "Твой проект заметили! Получи +15,000 XP", amount: 15000 },
-  { title: "Технический сбой", text: "Сервер упал. Потеря -8,000 XP", amount: -8000 },
-  { title: "Бычий рынок", text: "Активы растут! Получи +5,000 XP", amount: 5000 },
-  { title: "Налоговая проверка", text: "Нужно заплатить за прозрачность. -10,000 XP", amount: -10000 },
-  { title: "Инсайд", text: "Ты узнал секрет рынка. Получи +12,000 XP", amount: 12000 }
-];
-
 const BOARD_CELLS_COUNT = 24;
 
 export function useStore() {
@@ -41,73 +32,75 @@ export function useStore() {
 
   const isSyncingRef = useRef(false);
 
-  const syncWithServer = async (update: any) => {
+  // Универсальный метод синхронизации
+  const syncWithServer = async (payload: any) => {
     if (!gameState.lobbyId) return;
     isSyncingRef.current = true;
     try {
       const res = await fetch(`${API_BASE}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lobbyId: gameState.lobbyId, ...update })
+        body: JSON.stringify({ lobbyId: gameState.lobbyId, ...payload })
       });
       if (res.ok) {
         const data = await res.json();
-        setGameState(prev => ({ ...prev, ...data }));
+        setGameState(data);
       }
     } catch (e) {
       console.error("Sync error:", e);
     } finally {
-      // Краткая пауза перед тем как снова разрешить setInterval обновлять стейт
-      setTimeout(() => { isSyncingRef.current = false; }, 500);
+      // Даем небольшую паузу серверу на запись в KV
+      setTimeout(() => { isSyncingRef.current = false; }, 800);
     }
   };
 
+  // Инициализация Telegram и получение лобби
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
-    if (!tg) return;
-    tg.ready();
-    if (tg.initDataUnsafe?.user) {
-      const u = tg.initDataUnsafe.user;
-      setUser(prev => ({
-        ...prev,
-        id: String(u.id),
-        name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
-        photo_url: u.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.first_name)}&background=6366f1&color=fff`
-      }));
+    if (tg) {
+      tg.ready();
+      if (tg.initDataUnsafe?.user) {
+        const u = tg.initDataUnsafe.user;
+        setUser(prev => ({
+          ...prev,
+          id: String(u.id),
+          name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
+          photo_url: u.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.first_name)}&background=6366f1&color=fff`
+        }));
+      }
+      const startParam = tg.initDataUnsafe?.start_param || tg.initDataUnsafe?.start_query;
+      if (startParam) {
+        setGameState(prev => ({ ...prev, lobbyId: startParam.toUpperCase() }));
+        setView(AppView.SOCIAL);
+      }
     }
-
-    const startParam = tg.initDataUnsafe?.start_param || tg.initDataUnsafe?.start_query;
-    if (startParam) {
-      const cleanParam = startParam.toUpperCase();
-      setGameState(prev => ({ ...prev, lobbyId: cleanParam }));
-      setView(AppView.SOCIAL);
-    } else {
-      setGameState(prev => {
-        if (!prev.lobbyId) return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
-        return prev;
-      });
-    }
+    
+    setGameState(prev => {
+      if (!prev.lobbyId) return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
+      return prev;
+    });
   }, []);
 
+  // Регистрация игрока (срабатывает всегда при наличии ID и лобби)
   useEffect(() => {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
-    const register = async () => {
-      const me: GamePlayer = {
-        id: user.id,
-        name: user.name,
-        avatar: user.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
-        position: 0,
-        cash: 50000,
-        isBankrupt: false,
-        isReady: false,
-        deposits: [],
-        ownedAssets: [],
-      };
-      await syncWithServer({ player: me });
+    
+    const me: GamePlayer = {
+      id: user.id,
+      name: user.name,
+      avatar: user.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
+      position: 0,
+      cash: 50000,
+      isBankrupt: false,
+      isReady: false,
+      deposits: [],
+      ownedAssets: [],
     };
-    register();
+    
+    syncWithServer({ player: me });
   }, [user.id, gameState.lobbyId]);
 
+  // Фоновый поллинг обновлений
   useEffect(() => {
     if (!gameState.lobbyId) return;
     const interval = setInterval(async () => {
@@ -117,12 +110,14 @@ export function useStore() {
         if (!res.ok) return;
         const data = await res.json();
         setGameState(prev => {
-           // Если мы в процессе броска кубика, не перетираем его
-           if (prev.lastRoll) return prev;
-           return { ...prev, ...data };
+          // Если мы уже в игре, а сервер прислал лобби (баг KV), игнорируем
+          if (prev.status === 'playing' && data.status === 'lobby') return prev;
+          // Если бросаем кубик, не перебиваем анимацию
+          if (prev.lastRoll) return prev;
+          return data;
         });
       } catch (e) {}
-    }, 1500);
+    }, 2000);
     return () => clearInterval(interval);
   }, [gameState.lobbyId]);
 
@@ -131,15 +126,20 @@ export function useStore() {
     if (!me) return;
     
     const newReady = !me.isReady;
-    // Оптимистичное обновление для мгновенного отклика UI
+    
+    // Оптимистичный UI: ставим галочку сразу
     setGameState(prev => ({
       ...prev,
       players: prev.players.map(p => p.id === user.id ? { ...p, isReady: newReady } : p)
     }));
 
-    // Отправляем только данные своего игрока для атомарного обновления
+    // Отправляем актуальное состояние своего игрока
     await syncWithServer({ 
-      player: { id: user.id, isReady: newReady } 
+      player: { 
+        id: user.id, 
+        isReady: newReady,
+        avatar: user.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`
+      } 
     });
   };
 
@@ -150,7 +150,7 @@ export function useStore() {
     
     const botData = {
       name: name,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
       position: 0,
       cash: 50000,
       isBankrupt: false,
@@ -176,12 +176,6 @@ export function useStore() {
         let newPlayers = [...prev.players];
         let newHistory = [`${currentPlayer.name} выбросил ${roll} и зашел на ${cell.title}`, ...prev.history];
         
-        if (cell.type === 'event' || cell.type === 'tax') {
-          const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-          newPlayers = newPlayers.map((p, i) => i === prev.currentPlayerIndex ? { ...p, cash: Math.max(0, p.cash + event.amount) } : p);
-          newHistory.unshift(`⚡️ СОБЫТИЕ: ${event.title}! ${event.text}`);
-        }
-
         const standardUpdate = {
           players: newPlayers.map((p, i) => i === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
           lastRoll: null,
@@ -221,17 +215,15 @@ export function useStore() {
     const tg = (window as any).Telegram?.WebApp;
     const lobbyId = gameState.lobbyId;
     if (!lobbyId) return;
-    
     const botUser = "tribe_goals_bot"; 
     const inviteUrl = `https://t.me/${botUser}?start=${lobbyId}`;
     const shareText = `Присоединяйся к моей игре в Tribe Arena! 🚀\nКод лобби: ${lobbyId}`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
     
-    if (tg && tg.openTelegramLink) {
-      tg.openTelegramLink(shareUrl);
-    } else {
+    if (tg && tg.openTelegramLink) tg.openTelegramLink(shareUrl);
+    else {
       navigator.clipboard.writeText(inviteUrl);
-      alert(`Ссылка скопирована в буфер обмена!`);
+      alert(`Ссылка скопирована!`);
     }
   }, [gameState.lobbyId]);
 

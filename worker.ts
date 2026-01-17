@@ -19,11 +19,12 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+    const key = `lobby:${url.searchParams.get("id") || ""}`;
+
     // Получение полного состояния игры
     if (url.pathname === "/lobby" && request.method === "GET") {
       const id = url.searchParams.get("id");
       if (!id) return new Response("No ID", { status: 400 });
-      
       const data = await env.TRIBE_KV.get(`lobby:${id}`);
       return new Response(data || JSON.stringify({ players: [], status: 'lobby', history: [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -37,8 +38,8 @@ export default {
       
       if (!lobbyId) return new Response("No Lobby ID", { status: 400 });
       
-      const key = `lobby:${lobbyId}`;
-      let data = await env.TRIBE_KV.get(key);
+      const lobbyKey = `lobby:${lobbyId}`;
+      let data = await env.TRIBE_KV.get(lobbyKey);
       let state = data ? JSON.parse(data) : { 
         players: [], 
         status: 'lobby', 
@@ -48,57 +49,50 @@ export default {
         turnNumber: 1
       };
       
-      // 1. Обработка конкретного игрока (вход или смена статуса готовности)
+      let changed = false;
+
+      // 1. Атомарное добавление/обновление игрока
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          // Обновляем существующего игрока, сохраняя поля, которые не прислали
-          state.players[idx] = { ...state.players[idx], ...player };
+          // Обновляем существующего, сохраняя старые поля если новые не пришли
+          const old = state.players[idx];
+          state.players[idx] = { ...old, ...player };
+          if (JSON.stringify(old) !== JSON.stringify(state.players[idx])) changed = true;
         } else if (state.players.length < 4) {
-          // Новый игрок
           state.players.push(player);
           state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
+          changed = true;
         }
       }
 
-      // 2. Добавление бота сервером
+      // 2. Добавление бота (всегда готов)
       if (addBot) {
         const botId = 'bot-' + Math.random().toString(36).substring(2, 7);
-        const newBot = {
-          ...addBot,
-          id: botId,
-          isReady: true,
-          isBot: true
-        };
+        const newBot = { ...addBot, id: botId, isReady: true, isBot: true };
         state.players.push(newBot);
         state.history.unshift(`🤖 Бот ${newBot.name} присоединился!`);
+        changed = true;
       }
 
-      // 3. Общие обновления состояния (ходы, покупки)
+      // 3. Другие обновления
       if (gameStateUpdate) {
-        // Если прислали массив игроков целиком, мержим его аккуратно (не рекомендуется, но для совместимости оставим)
-        if (gameStateUpdate.players) {
-           gameStateUpdate.players.forEach((p: any) => {
-             const i = state.players.findIndex((sp: any) => sp.id === p.id);
-             if (i > -1) state.players[i] = { ...state.players[i], ...p };
-             else state.players.push(p);
-           });
-           delete gameStateUpdate.players;
-        }
         state = { ...state, ...gameStateUpdate };
+        changed = true;
       }
 
-      // 4. КРИТИЧЕСКАЯ ЛОГИКА: Автозапуск
+      // 4. КРИТИЧЕСКИЙ АВТОЗАПУСК
       if (state.status === 'lobby' && state.players.length >= 2) {
         const allReady = state.players.every((p: any) => p.isReady === true);
         if (allReady) {
           state.status = 'playing';
           state.currentPlayerIndex = 0;
-          state.history.unshift("🚀 Все готовы! Начинаем битву за капитал!");
+          state.history.unshift("🚀 Все готовы! Племя начинает игру!");
+          changed = true;
         }
       }
 
-      await env.TRIBE_KV.put(key, JSON.stringify(state), { expirationTtl: 3600 });
+      await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
       
       return new Response(JSON.stringify(state), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

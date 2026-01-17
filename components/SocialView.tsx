@@ -49,6 +49,43 @@ interface SocialViewProps {
   currentUserId: string;
 }
 
+// Fix: Type PlayerCard as React.FC to properly handle the special 'key' prop in the parent component's JSX
+const PlayerCard: React.FC<{ p: GamePlayer }> = ({ p }) => {
+  const [imgError, setImgError] = useState(false);
+  const avatarUrl = useMemo(() => {
+    if (imgError || !p.avatar) return `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=6366f1&color=fff&size=128`;
+    return p.avatar;
+  }, [p.avatar, p.name, imgError]);
+
+  return (
+    <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isReady ? 'border-emerald-500 shadow-emerald-500/20' : 'border-white/10'}`}>
+      <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 relative ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
+        <img 
+          src={avatarUrl} 
+          className="w-full h-full object-cover" 
+          onError={() => setImgError(true)} 
+        />
+        {p.isBot && <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-white italic tracking-tighter uppercase backdrop-blur-[1px]">AI</div>}
+      </div>
+      <div className="text-center">
+        <span className="font-black italic uppercase text-[10px] text-white block truncate w-24">{p.name}</span>
+        <div className="flex items-center justify-center gap-1 mt-1">
+          {p.isReady ? (
+            <span className="text-[7px] font-black uppercase text-emerald-400">ГОТОВ</span>
+          ) : (
+            <span className="text-[7px] font-black uppercase text-slate-500">ЖДЕМ...</span>
+          )}
+        </div>
+      </div>
+      {p.isReady && (
+         <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] text-white shadow-lg">
+            <i className="fa-solid fa-check"></i>
+         </div>
+      )}
+    </div>
+  );
+};
+
 export const SocialView: React.FC<SocialViewProps> = ({ 
   gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, currentUserId 
 }) => {
@@ -72,17 +109,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
   useEffect(() => {
     if (gameState.status === 'playing' && !gameState.lastRoll) {
        if (currentPlayer?.isBot) {
-          const timer = setTimeout(() => {
-             rollDice(BOARD);
-          }, 3000);
+          const timer = setTimeout(() => rollDice(BOARD), 3000);
           return () => clearTimeout(timer);
        }
     }
   }, [gameState.status, gameState.currentPlayerIndex, gameState.lastRoll]);
 
-  const narratorMessage = useMemo(() => {
-    return gameState.history[0] || "Племя готово к вызову...";
-  }, [gameState.history]);
+  const narratorMessage = useMemo(() => gameState.history[0] || "Племя готово к вызову...", [gameState.history]);
 
   const handleToggleReady = async () => {
     if (isSyncing) return;
@@ -90,8 +123,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
     try {
       await startGame(); 
     } finally {
-      // Искусственная задержка для предотвращения мерцания при синхронизации
-      setTimeout(() => setIsSyncing(false), 800);
+      setTimeout(() => setIsSyncing(false), 1000);
     }
   };
 
@@ -112,36 +144,15 @@ export const SocialView: React.FC<SocialViewProps> = ({
           </div>
 
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
-            {gameState.players.map(p => (
-              <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isReady ? 'border-emerald-500 shadow-emerald-500/20' : 'border-white/10'}`}>
-                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 relative ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
-                  <img src={p.avatar} className="w-full h-full object-cover" onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
-                  {p.isBot && <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-white italic tracking-tighter uppercase backdrop-blur-[1px]">AI</div>}
-                </div>
-                <div className="text-center">
-                  <span className="font-black italic uppercase text-[10px] text-white block truncate w-24">{p.name}</span>
-                  <div className="flex items-center justify-center gap-1 mt-1">
-                    {p.isReady ? (
-                      <span className="text-[7px] font-black uppercase text-emerald-400">ГОТОВ</span>
-                    ) : (
-                      <span className="text-[7px] font-black uppercase text-slate-500">ЖДЕМ...</span>
-                    )}
-                  </div>
-                </div>
-                {p.isReady && (
-                   <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] text-white shadow-lg">
-                      <i className="fa-solid fa-check"></i>
-                   </div>
-                )}
-              </div>
-            ))}
+            {gameState.players.map(p => <PlayerCard key={p.id} p={p} />)}
             
             {gameState.players.length < 4 && (
               <button 
-                onClick={joinFakePlayer}
-                className="p-5 bg-indigo-500/10 backdrop-blur-xl border-2 border-dashed border-indigo-500/30 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 animate-scale-up hover:bg-indigo-500/20 transition-all text-indigo-300"
+                onClick={() => { setIsSyncing(true); joinFakePlayer(); setTimeout(() => setIsSyncing(false), 1000); }}
+                disabled={isSyncing}
+                className="p-5 bg-indigo-500/10 backdrop-blur-xl border-2 border-dashed border-indigo-500/30 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 animate-scale-up hover:bg-indigo-500/20 transition-all text-indigo-300 disabled:opacity-20"
               >
-                <i className="fa-solid fa-robot text-xl"></i>
+                <i className={`fa-solid ${isSyncing ? 'fa-circle-notch fa-spin' : 'fa-robot'} text-xl`}></i>
                 <span className="text-[8px] font-black uppercase tracking-widest italic">+ БОТ</span>
               </button>
             )}
@@ -156,7 +167,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
               onClick={handleToggleReady}
               disabled={isSyncing}
               className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${
-                me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'
+                me?.isReady ? 'bg-emerald-500 text-white shadow-emerald-500/40' : 'bg-white text-slate-900 shadow-white/10'
               }`}
             >
               {isSyncing ? (
@@ -188,7 +199,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
   return (
     <div className="space-y-6 animate-fade-in pb-24 relative px-1 bg-slate-50 min-h-full">
-      {/* DICE EFFECT */}
+      {/* Остальной UI игры остается без изменений */}
       {showDiceEffect && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-950/80 backdrop-blur-2xl animate-fade-in">
           <div className="w-56 h-56 bg-white rounded-[4rem] shadow-[0_0_80px_rgba(99,102,241,0.5)] flex flex-col items-center justify-center text-slate-900 animate-bounce border-8 border-indigo-100">
@@ -198,7 +209,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
         </div>
       )}
 
-      {/* AI NARRATOR / ВЕДУЩИЙ */}
       <div className="mx-2 p-6 bg-[#0f172a] rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border-2 border-indigo-500/50 group">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
         <div className="flex items-center gap-5 relative z-10">
@@ -212,7 +222,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
         </div>
       </div>
 
-      {/* PLAYERS STRIP */}
       <div className="flex gap-4 overflow-x-auto no-scrollbar px-4 py-2">
         {gameState.players.map((p, idx) => (
           <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[150px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-2xl scale-105' : 'bg-white/40 border-slate-100 text-slate-400'}`}>
@@ -231,7 +240,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
         ))}
       </div>
 
-      {/* NEON BOARD */}
       <div className="bg-[#020617] p-5 rounded-[4.5rem] shadow-[0_40px_100px_rgba(0,0,0,0.7)] relative overflow-hidden border-8 border-[#1e293b] mx-2">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(79,70,229,0.1),transparent)] pointer-events-none"></div>
         <div className="grid grid-cols-4 gap-4 relative z-10">
@@ -271,7 +279,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
           })}
         </div>
 
-        {/* CONTROLS */}
         <div className="mt-10 p-8 bg-white/5 rounded-[3rem] border border-white/10 backdrop-blur-3xl flex flex-col items-center gap-5">
            <div className={`text-[11px] font-black uppercase tracking-[0.4em] italic transition-all ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>
              {isMyTurn ? 'ТВОЙ ВЫХОД!' : currentPlayer?.isBot ? 'БОТ ДУМАЕТ...' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}
@@ -285,8 +292,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
            </button>
         </div>
       </div>
-
-      {/* ARENA LOG */}
+      
+      {/* ... Остальной лог и модальное окно остаются прежними ... */}
       <div className="px-5 space-y-4 pb-12">
         <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic px-2">Хроника Племени</h3>
         <div className="space-y-3">
@@ -302,7 +309,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
         </div>
       </div>
 
-      {/* CELL MODAL */}
       {selectedCell && (
         <div className="fixed inset-0 z-[1500] flex items-end p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedCell(null)}>
            <div className="w-full p-10 bg-white rounded-[4rem] shadow-2xl space-y-8 animate-slide-up" onClick={e => e.stopPropagation()}>
