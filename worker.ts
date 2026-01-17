@@ -33,7 +33,7 @@ export default {
     // Обновление состояния или вход
     if (url.pathname === "/join" && request.method === "POST") {
       const body = await request.json();
-      const { lobbyId, player, gameStateUpdate } = body;
+      const { lobbyId, player, gameStateUpdate, addBot } = body;
       
       if (!lobbyId) return new Response("No Lobby ID", { status: 400 });
       
@@ -48,38 +48,49 @@ export default {
         turnNumber: 1
       };
       
-      // Если это вход нового игрока
+      // 1. Обработка конкретного игрока (вход или смена статуса готовности)
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          // Важно: если пришло обновление только одного игрока, мы не должны сбрасывать isReady других
-          const oldReady = state.players[idx].isReady;
-          state.players[idx] = { 
-            ...state.players[idx],
-            ...player, 
-            isReady: player.isReady !== undefined ? player.isReady : oldReady 
-          };
+          // Обновляем существующего игрока, сохраняя поля, которые не прислали
+          state.players[idx] = { ...state.players[idx], ...player };
         } else if (state.players.length < 4) {
-          state.players.push({ ...player, isReady: player.isBot || false });
+          // Новый игрок
+          state.players.push(player);
           state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
         }
       }
 
-      // Если передано обновление (например, кто-то нажал "Готов" или добавил бота)
-      if (gameStateUpdate) {
-        // Чтобы не потерять игроков при частичном обновлении
-        if (gameStateUpdate.players) {
-           // Объединяем существующих игроков с обновленными данными готовности
-           state.players = gameStateUpdate.players;
-        }
-        // Другие поля состояния
-        const { players, ...otherUpdates } = gameStateUpdate;
-        state = { ...state, ...otherUpdates };
+      // 2. Добавление бота сервером
+      if (addBot) {
+        const botId = 'bot-' + Math.random().toString(36).substring(2, 7);
+        const newBot = {
+          ...addBot,
+          id: botId,
+          isReady: true,
+          isBot: true
+        };
+        state.players.push(newBot);
+        state.history.unshift(`🤖 Бот ${newBot.name} присоединился!`);
       }
 
-      // КРИТИЧЕСКАЯ ЛОГИКА: Автозапуск
+      // 3. Общие обновления состояния (ходы, покупки)
+      if (gameStateUpdate) {
+        // Если прислали массив игроков целиком, мержим его аккуратно (не рекомендуется, но для совместимости оставим)
+        if (gameStateUpdate.players) {
+           gameStateUpdate.players.forEach((p: any) => {
+             const i = state.players.findIndex((sp: any) => sp.id === p.id);
+             if (i > -1) state.players[i] = { ...state.players[i], ...p };
+             else state.players.push(p);
+           });
+           delete gameStateUpdate.players;
+        }
+        state = { ...state, ...gameStateUpdate };
+      }
+
+      // 4. КРИТИЧЕСКАЯ ЛОГИКА: Автозапуск
       if (state.status === 'lobby' && state.players.length >= 2) {
-        const allReady = state.players.every((p: any) => p.isReady);
+        const allReady = state.players.every((p: any) => p.isReady === true);
         if (allReady) {
           state.status = 'playing';
           state.currentPlayerIndex = 0;

@@ -39,13 +39,16 @@ export function useStore() {
     lastRoll: null
   });
 
-  const syncWithServer = async (update: Partial<GameState>) => {
+  const isSyncingRef = useRef(false);
+
+  const syncWithServer = async (update: any) => {
     if (!gameState.lobbyId) return;
+    isSyncingRef.current = true;
     try {
       const res = await fetch(`${API_BASE}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lobbyId: gameState.lobbyId, gameStateUpdate: update })
+        body: JSON.stringify({ lobbyId: gameState.lobbyId, ...update })
       });
       if (res.ok) {
         const data = await res.json();
@@ -53,6 +56,9 @@ export function useStore() {
       }
     } catch (e) {
       console.error("Sync error:", e);
+    } finally {
+      // Краткая пауза перед тем как снова разрешить setInterval обновлять стейт
+      setTimeout(() => { isSyncingRef.current = false; }, 500);
     }
   };
 
@@ -86,28 +92,18 @@ export function useStore() {
   useEffect(() => {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
     const register = async () => {
-      try {
-        const me: GamePlayer = {
-          id: user.id,
-          name: user.name,
-          avatar: user.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
-          position: 0,
-          cash: 50000,
-          isBankrupt: false,
-          isReady: false,
-          deposits: [],
-          ownedAssets: [],
-        };
-        const res = await fetch(`${API_BASE}/join`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lobbyId: gameState.lobbyId, player: me })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setGameState(prev => ({ ...prev, ...data }));
-        }
-      } catch (e) {}
+      const me: GamePlayer = {
+        id: user.id,
+        name: user.name,
+        avatar: user.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
+        position: 0,
+        cash: 50000,
+        isBankrupt: false,
+        isReady: false,
+        deposits: [],
+        ownedAssets: [],
+      };
+      await syncWithServer({ player: me });
     };
     register();
   }, [user.id, gameState.lobbyId]);
@@ -115,17 +111,13 @@ export function useStore() {
   useEffect(() => {
     if (!gameState.lobbyId) return;
     const interval = setInterval(async () => {
-      if (document.hidden) return;
+      if (document.hidden || isSyncingRef.current) return;
       try {
         const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
         if (!res.ok) return;
         const data = await res.json();
-        // Чтобы не перетирать локальное состояние, если мы только что отправили запрос
         setGameState(prev => {
-           if (prev.status === 'lobby' && data.status === 'playing') {
-             return { ...prev, ...data };
-           }
-           // Небольшая задержка обновления если мы в процессе хода
+           // Если мы в процессе броска кубика, не перетираем его
            if (prev.lastRoll) return prev;
            return { ...prev, ...data };
         });
@@ -139,14 +131,15 @@ export function useStore() {
     if (!me) return;
     
     const newReady = !me.isReady;
-    // Оптимистичное обновление
+    // Оптимистичное обновление для мгновенного отклика UI
     setGameState(prev => ({
       ...prev,
       players: prev.players.map(p => p.id === user.id ? { ...p, isReady: newReady } : p)
     }));
 
+    // Отправляем только данные своего игрока для атомарного обновления
     await syncWithServer({ 
-      players: gameState.players.map(p => p.id === user.id ? { ...p, isReady: newReady } : p) 
+      player: { id: user.id, isReady: newReady } 
     });
   };
 
@@ -154,9 +147,8 @@ export function useStore() {
     if (gameState.players.length >= 4) return;
     const botNames = ["Крипто-Волк", "Инвестор-Тень", "Машина-Роста", "Бот-Аскет"];
     const name = botNames[Math.floor(Math.random() * botNames.length)];
-    const botId = 'bot-' + Math.random().toString(36).substring(2, 7);
-    const botPlayer: GamePlayer = {
-      id: botId,
+    
+    const botData = {
       name: name,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`,
       position: 0,
@@ -168,9 +160,7 @@ export function useStore() {
       ownedAssets: [],
     };
 
-    await syncWithServer({ 
-      players: [...gameState.players, botPlayer]
-    });
+    await syncWithServer({ addBot: botData });
   };
 
   const rollDice = async (board: BoardCell[]) => {
@@ -192,21 +182,6 @@ export function useStore() {
           newHistory.unshift(`⚡️ СОБЫТИЕ: ${event.title}! ${event.text}`);
         }
 
-        // Логика бота: если попал на актив и хватает денег - покупает
-        if (currentPlayer.isBot && cell.type === 'asset' && currentPlayer.cash >= (cell.cost || 0) && !prev.ownedAssets[newPos]) {
-           const finalPlayers = newPlayers.map((p, idx) => idx === prev.currentPlayerIndex ? { ...p, position: newPos, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, newPos] } : p);
-           const finalUpdate = {
-             players: finalPlayers,
-             lastRoll: null,
-             ownedAssets: { ...prev.ownedAssets, [newPos]: currentPlayer.id },
-             currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
-             turnNumber: prev.turnNumber + 1,
-             history: [`💎 ${currentPlayer.name} инвестировал в ${cell.title}!`, ...newHistory].slice(0, 20)
-           };
-           syncWithServer(finalUpdate);
-           return { ...prev, ...finalUpdate };
-        }
-
         const standardUpdate = {
           players: newPlayers.map((p, i) => i === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
           lastRoll: null,
@@ -214,27 +189,11 @@ export function useStore() {
           turnNumber: prev.turnNumber + 1,
           history: newHistory.slice(0, 20)
         };
-        syncWithServer(standardUpdate);
+        syncWithServer({ gameStateUpdate: standardUpdate });
         return { ...prev, ...standardUpdate };
       });
     }, 2000);
   };
-
-  // Авто-ход бота
-  useEffect(() => {
-    if (gameState.status === 'playing' && !gameState.lastRoll) {
-      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-      if (currentPlayer?.isBot) {
-        // Задержка для реализма
-        const timeout = setTimeout(() => {
-           // Нам нужны данные доски, но мы можем использовать глобальную или передать
-           // Здесь мы просто используем BOARD, который обычно импортируется или передается
-           // В SocialView.tsx мы вызываем rollDice, сделаем это доступным
-        }, 3000);
-        return () => clearTimeout(timeout);
-      }
-    }
-  }, [gameState.currentPlayerIndex, gameState.status, gameState.lastRoll]);
 
   const buyAsset = async (cellId: number, board: BoardCell[]) => {
     const playerIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
@@ -246,7 +205,7 @@ export function useStore() {
         players: gameState.players.map((p, idx) => idx === playerIdx ? { ...p, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, cellId] } : p),
         history: [`💎 ${player.name} инвестировал в ${cell.title}!`, ...gameState.history].slice(0, 20)
       };
-      await syncWithServer(update);
+      await syncWithServer({ gameStateUpdate: update });
     }
   };
 
@@ -279,7 +238,7 @@ export function useStore() {
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
     rollDice, buyAsset, generateInviteLink, toggleReady, joinLobbyManual, addBot,
-    joinFakePlayer: addBot, // Используем addBot вместо фейков
+    joinFakePlayer: addBot,
     createDeposit: () => {}, 
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     updateSubgoalProgress: () => {},
