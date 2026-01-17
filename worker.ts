@@ -52,18 +52,29 @@ export default {
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          // Обновляем данные (сохраняя статус готовности, если он не передан явно)
-          const currentReady = state.players[idx].isReady;
-          state.players[idx] = { ...player, isReady: player.isReady !== undefined ? player.isReady : currentReady };
+          // Важно: если пришло обновление только одного игрока, мы не должны сбрасывать isReady других
+          const oldReady = state.players[idx].isReady;
+          state.players[idx] = { 
+            ...state.players[idx],
+            ...player, 
+            isReady: player.isReady !== undefined ? player.isReady : oldReady 
+          };
         } else if (state.players.length < 4) {
-          state.players.push({ ...player, isReady: false });
+          state.players.push({ ...player, isReady: player.isBot || false });
           state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
         }
       }
 
-      // Если передано обновление (например, кто-то нажал "Готов")
+      // Если передано обновление (например, кто-то нажал "Готов" или добавил бота)
       if (gameStateUpdate) {
-        state = { ...state, ...gameStateUpdate };
+        // Чтобы не потерять игроков при частичном обновлении
+        if (gameStateUpdate.players) {
+           // Объединяем существующих игроков с обновленными данными готовности
+           state.players = gameStateUpdate.players;
+        }
+        // Другие поля состояния
+        const { players, ...otherUpdates } = gameStateUpdate;
+        state = { ...state, ...otherUpdates };
       }
 
       // КРИТИЧЕСКАЯ ЛОГИКА: Автозапуск

@@ -68,6 +68,18 @@ export const SocialView: React.FC<SocialViewProps> = ({
     }
   }, [gameState.lastRoll]);
 
+  // Автоматизация хода бота
+  useEffect(() => {
+    if (gameState.status === 'playing' && !gameState.lastRoll) {
+       if (currentPlayer?.isBot) {
+          const timer = setTimeout(() => {
+             rollDice(BOARD);
+          }, 3000);
+          return () => clearTimeout(timer);
+       }
+    }
+  }, [gameState.status, gameState.currentPlayerIndex, gameState.lastRoll]);
+
   const narratorMessage = useMemo(() => {
     return gameState.history[0] || "Племя готово к вызову...";
   }, [gameState.history]);
@@ -76,9 +88,10 @@ export const SocialView: React.FC<SocialViewProps> = ({
     if (isSyncing) return;
     setIsSyncing(true);
     try {
-      await startGame(); // Это вызывает toggleReady в useStore
+      await startGame(); 
     } finally {
-      setIsSyncing(false);
+      // Искусственная задержка для предотвращения мерцания при синхронизации
+      setTimeout(() => setIsSyncing(false), 800);
     }
   };
 
@@ -101,8 +114,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {gameState.players.map(p => (
               <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isReady ? 'border-emerald-500 shadow-emerald-500/20' : 'border-white/10'}`}>
-                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
+                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 relative ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
                   <img src={p.avatar} className="w-full h-full object-cover" onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
+                  {p.isBot && <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-white italic tracking-tighter uppercase backdrop-blur-[1px]">AI</div>}
                 </div>
                 <div className="text-center">
                   <span className="font-black italic uppercase text-[10px] text-white block truncate w-24">{p.name}</span>
@@ -121,6 +135,16 @@ export const SocialView: React.FC<SocialViewProps> = ({
                 )}
               </div>
             ))}
+            
+            {gameState.players.length < 4 && (
+              <button 
+                onClick={joinFakePlayer}
+                className="p-5 bg-indigo-500/10 backdrop-blur-xl border-2 border-dashed border-indigo-500/30 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 animate-scale-up hover:bg-indigo-500/20 transition-all text-indigo-300"
+              >
+                <i className="fa-solid fa-robot text-xl"></i>
+                <span className="text-[8px] font-black uppercase tracking-widest italic">+ БОТ</span>
+              </button>
+            )}
           </div>
 
           <div className="w-full space-y-4 pt-4 relative z-10">
@@ -130,6 +154,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
             
             <button 
               onClick={handleToggleReady}
+              disabled={isSyncing}
               className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${
                 me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'
               }`}
@@ -195,6 +220,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
               <div className="relative">
                 <img src={p.avatar} className={`w-12 h-12 rounded-2xl object-cover border-2 ${gameState.currentPlayerIndex === idx ? 'border-indigo-400 shadow-md' : 'border-slate-200 grayscale opacity-60'}`} onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
                 {gameState.currentPlayerIndex === idx && <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-ping"></div>}
+                {p.isBot && <div className="absolute -bottom-1 -left-1 px-1 bg-indigo-600 rounded text-[6px] font-black text-white italic">AI</div>}
               </div>
               <div className="text-left">
                 <span className="text-[11px] font-black uppercase italic block truncate w-16">{p.name}</span>
@@ -229,8 +255,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
                 {occupiers.length > 0 && (
                   <div className="absolute -top-1 -right-1 flex -space-x-2">
                     {occupiers.map(p => (
-                      <div key={p.id} className="w-4 h-4 rounded-full border-2 border-[#020617] shadow-lg overflow-hidden">
+                      <div key={p.id} className="w-4 h-4 rounded-full border-2 border-[#020617] shadow-lg overflow-hidden relative">
                         <img src={p.avatar} className="w-full h-full object-cover" />
+                        {p.isBot && <div className="absolute inset-0 bg-indigo-500/40"></div>}
                       </div>
                     ))}
                   </div>
@@ -247,7 +274,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
         {/* CONTROLS */}
         <div className="mt-10 p-8 bg-white/5 rounded-[3rem] border border-white/10 backdrop-blur-3xl flex flex-col items-center gap-5">
            <div className={`text-[11px] font-black uppercase tracking-[0.4em] italic transition-all ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>
-             {isMyTurn ? 'ТВОЙ ВЫХОД!' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}
+             {isMyTurn ? 'ТВОЙ ВЫХОД!' : currentPlayer?.isBot ? 'БОТ ДУМАЕТ...' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}
            </div>
            <button 
              disabled={!isMyTurn || !!gameState.lastRoll} 

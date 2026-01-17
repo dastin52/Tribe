@@ -13,6 +13,8 @@ const EVENTS = [
   { title: "Инсайд", text: "Ты узнал секрет рынка. Получи +12,000 XP", amount: 12000 }
 ];
 
+const BOARD_CELLS_COUNT = 24;
+
 export function useStore() {
   const [user, setUser] = useState<User>(() => ({
     ...INITIAL_USER,
@@ -118,7 +120,15 @@ export function useStore() {
         const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
         if (!res.ok) return;
         const data = await res.json();
-        setGameState(prev => ({ ...prev, ...data }));
+        // Чтобы не перетирать локальное состояние, если мы только что отправили запрос
+        setGameState(prev => {
+           if (prev.status === 'lobby' && data.status === 'playing') {
+             return { ...prev, ...data };
+           }
+           // Небольшая задержка обновления если мы в процессе хода
+           if (prev.lastRoll) return prev;
+           return { ...prev, ...data };
+        });
       } catch (e) {}
     }, 1500);
     return () => clearInterval(interval);
@@ -129,38 +139,102 @@ export function useStore() {
     if (!me) return;
     
     const newReady = !me.isReady;
-    const updatedPlayers = gameState.players.map(p => 
-      p.id === user.id ? { ...p, isReady: newReady } : p
-    );
+    // Оптимистичное обновление
+    setGameState(prev => ({
+      ...prev,
+      players: prev.players.map(p => p.id === user.id ? { ...p, isReady: newReady } : p)
+    }));
 
-    await syncWithServer({ players: updatedPlayers });
+    await syncWithServer({ 
+      players: gameState.players.map(p => p.id === user.id ? { ...p, isReady: newReady } : p) 
+    });
+  };
+
+  const addBot = async () => {
+    if (gameState.players.length >= 4) return;
+    const botNames = ["Крипто-Волк", "Инвестор-Тень", "Машина-Роста", "Бот-Аскет"];
+    const name = botNames[Math.floor(Math.random() * botNames.length)];
+    const botId = 'bot-' + Math.random().toString(36).substring(2, 7);
+    const botPlayer: GamePlayer = {
+      id: botId,
+      name: name,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`,
+      position: 0,
+      cash: 50000,
+      isBankrupt: false,
+      isReady: true,
+      isBot: true,
+      deposits: [],
+      ownedAssets: [],
+    };
+
+    await syncWithServer({ 
+      players: [...gameState.players, botPlayer]
+    });
   };
 
   const rollDice = async (board: BoardCell[]) => {
     if (gameState.lastRoll) return;
     const roll = Math.floor(Math.random() * 6) + 1;
     setGameState(prev => ({ ...prev, lastRoll: roll }));
+    
     setTimeout(async () => {
-      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-      const newPos = (currentPlayer.position + roll) % board.length;
-      const cell = board[newPos];
-      let newPlayers = [...gameState.players];
-      let newHistory = [`${currentPlayer.name} выбросил ${roll} и зашел на ${cell.title}`, ...gameState.history];
-      if (cell.type === 'event' || cell.type === 'tax') {
-        const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-        newPlayers = newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? { ...p, cash: Math.max(0, p.cash + event.amount) } : p);
-        newHistory.unshift(`⚡️ СОБЫТИЕ: ${event.title}! ${event.text}`);
-      }
-      const update = {
-        players: newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? { ...p, position: newPos } : p),
-        lastRoll: null,
-        currentPlayerIndex: (gameState.currentPlayerIndex + 1) % gameState.players.length,
-        turnNumber: gameState.turnNumber + 1,
-        history: newHistory.slice(0, 20)
-      };
-      await syncWithServer(update);
+      setGameState(prev => {
+        const currentPlayer = prev.players[prev.currentPlayerIndex];
+        const newPos = (currentPlayer.position + roll) % BOARD_CELLS_COUNT;
+        const cell = board[newPos];
+        let newPlayers = [...prev.players];
+        let newHistory = [`${currentPlayer.name} выбросил ${roll} и зашел на ${cell.title}`, ...prev.history];
+        
+        if (cell.type === 'event' || cell.type === 'tax') {
+          const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+          newPlayers = newPlayers.map((p, i) => i === prev.currentPlayerIndex ? { ...p, cash: Math.max(0, p.cash + event.amount) } : p);
+          newHistory.unshift(`⚡️ СОБЫТИЕ: ${event.title}! ${event.text}`);
+        }
+
+        // Логика бота: если попал на актив и хватает денег - покупает
+        if (currentPlayer.isBot && cell.type === 'asset' && currentPlayer.cash >= (cell.cost || 0) && !prev.ownedAssets[newPos]) {
+           const finalPlayers = newPlayers.map((p, idx) => idx === prev.currentPlayerIndex ? { ...p, position: newPos, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, newPos] } : p);
+           const finalUpdate = {
+             players: finalPlayers,
+             lastRoll: null,
+             ownedAssets: { ...prev.ownedAssets, [newPos]: currentPlayer.id },
+             currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
+             turnNumber: prev.turnNumber + 1,
+             history: [`💎 ${currentPlayer.name} инвестировал в ${cell.title}!`, ...newHistory].slice(0, 20)
+           };
+           syncWithServer(finalUpdate);
+           return { ...prev, ...finalUpdate };
+        }
+
+        const standardUpdate = {
+          players: newPlayers.map((p, i) => i === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
+          lastRoll: null,
+          currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
+          turnNumber: prev.turnNumber + 1,
+          history: newHistory.slice(0, 20)
+        };
+        syncWithServer(standardUpdate);
+        return { ...prev, ...standardUpdate };
+      });
     }, 2000);
   };
+
+  // Авто-ход бота
+  useEffect(() => {
+    if (gameState.status === 'playing' && !gameState.lastRoll) {
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      if (currentPlayer?.isBot) {
+        // Задержка для реализма
+        const timeout = setTimeout(() => {
+           // Нам нужны данные доски, но мы можем использовать глобальную или передать
+           // Здесь мы просто используем BOARD, который обычно импортируется или передается
+           // В SocialView.tsx мы вызываем rollDice, сделаем это доступным
+        }, 3000);
+        return () => clearTimeout(timeout);
+      }
+    }
+  }, [gameState.currentPlayerIndex, gameState.status, gameState.lastRoll]);
 
   const buyAsset = async (cellId: number, board: BoardCell[]) => {
     const playerIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
@@ -204,8 +278,8 @@ export function useStore() {
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
-    rollDice, buyAsset, generateInviteLink, toggleReady, joinLobbyManual,
-    joinFakePlayer: () => {},
+    rollDice, buyAsset, generateInviteLink, toggleReady, joinLobbyManual, addBot,
+    joinFakePlayer: addBot, // Используем addBot вместо фейков
     createDeposit: () => {}, 
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     updateSubgoalProgress: () => {},
@@ -217,6 +291,6 @@ export function useStore() {
     resetData: () => { window.location.reload(); },
     startMyOwnJourney: () => {},
     sendReaction: (emoji: string) => {},
-    startGame: toggleReady // Алиас для совместимости
+    startGame: toggleReady
   };
 }
