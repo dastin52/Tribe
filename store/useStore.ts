@@ -1,13 +1,18 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { User, AppView, GameState, GamePlayer, BoardCell, GameDeposit, YearGoal, SubGoal, Transaction } from '../types';
 import { INITIAL_USER, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_TRANSACTIONS } from './initialData';
 
-// Актуальный URL вашего воркера со скриншота
+// Актуальный URL вашего воркера
 const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
 
 export function useStore() {
-  const [user, setUser] = useState<User>(INITIAL_USER);
+  // Инициализируем пользователя со случайным ID, чтобы избежать коллизий в лобби
+  const [user, setUser] = useState<User>(() => ({
+    ...INITIAL_USER,
+    id: 'anon-' + Math.random().toString(36).substring(2, 9)
+  }));
+  
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [goals, setGoals] = useState<YearGoal[]>(SAMPLE_GOALS);
   const [subgoals, setSubgoals] = useState<SubGoal[]>(SAMPLE_SUBGOALS);
@@ -26,30 +31,39 @@ export function useStore() {
     lastRoll: null
   });
 
+  // 1. Получение данных из Telegram
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg?.initDataUnsafe?.user) {
       const u = tg.initDataUnsafe.user;
-      setUser(prev => ({
-        ...prev,
+      const realUser = {
+        ...user,
         id: String(u.id),
         name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
         photo_url: u.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.first_name)}&background=6366f1&color=fff`
-      }));
+      };
+      setUser(realUser);
+
+      // Если есть start_param, сразу ставим лобби и переходим в соц. вкладку
+      const startParam = tg.initDataUnsafe.start_param;
+      if (startParam) {
+        setGameState(prev => ({ ...prev, lobbyId: startParam }));
+        setView(AppView.SOCIAL);
+      }
     }
   }, []);
 
+  // 2. Генерация Lobby ID если его нет
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    const startParam = tg?.initDataUnsafe?.start_param;
-    const currentLobbyId = startParam || gameState.lobbyId || Math.random().toString(36).substring(7);
-
-    if (startParam && !gameState.lobbyId) {
-      setGameState(prev => ({ ...prev, lobbyId: startParam }));
-      setView(AppView.SOCIAL);
-    } else if (!gameState.lobbyId) {
-      setGameState(prev => ({ ...prev, lobbyId: currentLobbyId }));
+    if (!gameState.lobbyId) {
+      const newId = Math.random().toString(36).substring(2, 7);
+      setGameState(prev => ({ ...prev, lobbyId: newId }));
     }
+  }, [gameState.lobbyId]);
+
+  // 3. Регистрация в лобби при изменении ID пользователя или Lobby ID
+  useEffect(() => {
+    if (!gameState.lobbyId || !user.id) return;
 
     const registerInLobby = async () => {
       try {
@@ -62,57 +76,79 @@ export function useStore() {
           isBankrupt: false,
           deposits: [],
           ownedAssets: [],
-          isHost: !startParam
+          isHost: !window.Telegram?.WebApp?.initDataUnsafe?.start_param
         };
 
         await fetch(`${API_BASE}/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lobbyId: currentLobbyId, player: me })
+          body: JSON.stringify({ lobbyId: gameState.lobbyId, player: me })
         });
       } catch (e) {
-        console.warn("API Offline");
+        console.error("Lobby registration failed", e);
       }
     };
 
     registerInLobby();
+  }, [user.id, gameState.lobbyId]);
 
-    // Проверка лобби раз в 5 секунд для экономии лимитов Cloudflare
+  // 4. Опрос состояния лобби (Polling)
+  useEffect(() => {
+    const lId = gameState.lobbyId;
+    if (!lId) return;
+
     const interval = setInterval(async () => {
-      if (gameState.status !== 'lobby' || document.hidden) return;
+      if (document.hidden) return; // Не тратим лимиты, если приложение свернуто
       
       try {
-        const res = await fetch(`${API_BASE}/lobby?id=${currentLobbyId}`);
+        const res = await fetch(`${API_BASE}/lobby?id=${lId}`);
         const data = await res.json();
-        if (data.players) {
+        if (data && data.players) {
           setGameState(prev => {
-            if (prev.players.length === data.players.length) return prev;
-            return { ...prev, players: data.players };
+            // Обновляем только если данные реально изменились
+            if (JSON.stringify(prev.players) === JSON.stringify(data.players) && prev.status === data.status) {
+              return prev;
+            }
+            return {
+              ...prev,
+              players: data.players,
+              status: data.status || prev.status
+            };
           });
         }
-      } catch (e) {}
-    }, 5000); 
+      } catch (e) {
+        console.error("Polling error", e);
+      }
+    }, 3000); // 3 секунды для более быстрой реакции
 
     return () => clearInterval(interval);
-  }, [user.id, gameState.lobbyId, gameState.status]);
+  }, [gameState.lobbyId]);
 
   const generateInviteLink = () => {
-    const botUsername = "tribe_goals_bot"; // Убедитесь, что это имя вашего бота
+    // ВАЖНО: Убедитесь, что этот username совпадает с вашим ботом
+    const botUsername = "Serzh_Tribe_bot"; 
     const link = `https://t.me/${botUsername}/app?startapp=${gameState.lobbyId}`;
+    
     if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Вступай в моё Племя! Построим капитал вместе 🚀")}`);
+      window.Telegram.WebApp.openTelegramLink(
+        `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Вступай в моё Племя! Построим капитал вместе 🚀")}`
+      );
+    } else {
+      // Для тестов в браузере
+      console.log("Invite link:", link);
+      alert("Ссылка скопирована (консоль)");
     }
   };
 
-  const joinFakePlayer = () => {
-    const fakeId = `bot-${Math.random().toString(36).substring(5)}`;
-    setGameState(prev => ({
-      ...prev,
-      players: [...prev.players, {
-        id: fakeId, name: `Бот ${prev.players.length}`, avatar: `https://i.pravatar.cc/150?u=${fakeId}`,
-        position: 0, cash: 50000, isBankrupt: false, deposits: [], ownedAssets: []
-      }]
-    }));
+  const startGame = async () => {
+    try {
+      await fetch(`${API_BASE}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lobbyId: gameState.lobbyId, status: 'playing' })
+      });
+      setGameState(prev => ({ ...prev, status: 'playing' }));
+    } catch (e) {}
   };
 
   const rollDice = (board: BoardCell[]) => {
@@ -149,8 +185,8 @@ export function useStore() {
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
-    rollDice, buyAsset, generateInviteLink, joinFakePlayer,
-    startGame: () => setGameState(prev => ({ ...prev, status: 'playing' })),
+    rollDice, buyAsset, generateInviteLink, startGame,
+    joinFakePlayer: () => {},
     createDeposit: () => {}, 
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     updateSubgoalProgress: () => {},
