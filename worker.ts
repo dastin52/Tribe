@@ -33,7 +33,7 @@ export default {
     // Обновление состояния или вход
     if (url.pathname === "/join" && request.method === "POST") {
       const body = await request.json();
-      const { lobbyId, player, status, gameStateUpdate } = body;
+      const { lobbyId, player, gameStateUpdate } = body;
       
       if (!lobbyId) return new Response("No Lobby ID", { status: 400 });
       
@@ -52,21 +52,22 @@ export default {
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          state.players[idx] = { ...state.players[idx], ...player };
+          // Обновляем данные существующего игрока, но сохраняем его роль Хоста если она была
+          const existingHostStatus = state.players[idx].isHost;
+          state.players[idx] = { ...player, isHost: existingHostStatus };
         } else if (state.players.length < 4) {
-          state.players.push(player);
+          // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Первый игрок — Хост, остальные — нет.
+          const isFirstPlayer = state.players.length === 0;
+          const newPlayer = { ...player, isHost: isFirstPlayer };
+          state.players.push(newPlayer);
+          
+          if (!isFirstPlayer) {
+            state.history.unshift(`🤝 ${player.name} присоединился к походу!`);
+          }
         }
       }
 
-      // Если это обновление статуса (старт игры)
-      if (status) {
-        state.status = status;
-        if (status === 'playing') {
-          state.history.unshift("Игра началась! Удачи, союзники.");
-        }
-      }
-
-      // Если это игровое действие (бросок, покупка)
+      // Если это игровое действие (старт, бросок, покупка)
       if (gameStateUpdate) {
         state = { ...state, ...gameStateUpdate };
       }

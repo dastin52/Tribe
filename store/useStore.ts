@@ -68,12 +68,14 @@ export function useStore() {
       }));
     }
 
+    // Ищем код лобби в параметрах запуска
     const startParam = tg.initDataUnsafe?.start_param || tg.initDataUnsafe?.start_query;
     if (startParam) {
       const cleanParam = startParam.toUpperCase();
       setGameState(prev => ({ ...prev, lobbyId: cleanParam }));
       setView(AppView.SOCIAL);
     } else {
+      // Если мы открыли приложение сами, генерируем новое лобби
       setGameState(prev => {
         if (!prev.lobbyId) return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
         return prev;
@@ -85,8 +87,6 @@ export function useStore() {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
     const register = async () => {
       try {
-        const tg = (window as any).Telegram?.WebApp;
-        const isHost = !(tg?.initDataUnsafe?.start_param || tg?.initDataUnsafe?.start_query);
         const me: GamePlayer = {
           id: user.id,
           name: user.name,
@@ -96,7 +96,7 @@ export function useStore() {
           isBankrupt: false,
           deposits: [],
           ownedAssets: [],
-          isHost: isHost
+          isHost: false // Сервер сам решит, кто хост
         };
         const res = await fetch(`${API_BASE}/join`, {
           method: 'POST',
@@ -202,8 +202,7 @@ export function useStore() {
     const lobbyId = gameState.lobbyId;
     if (!lobbyId) return;
     
-    // Пытаемся определить имя бота из контекста или используем стандарт
-    const botName = "TribeSocialOS_bot"; 
+    const botName = "tribe_goals_bot"; 
     const inviteUrl = `https://t.me/${botName}?start=${lobbyId}`;
     const shareText = `Присоединяйся к моей игре в Tribe Arena! 🚀\nКод лобби: ${lobbyId}`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
@@ -211,12 +210,11 @@ export function useStore() {
     if (tg && tg.openTelegramLink) {
       tg.openTelegramLink(shareUrl);
     } else {
-      // Резервный вариант: копирование в буфер
-      navigator.clipboard.writeText(lobbyId);
+      navigator.clipboard.writeText(inviteUrl);
       if (tg && tg.showAlert) {
-        tg.showAlert(`Код лобби ${lobbyId} скопирован! Отправьте его друзьям.`);
+        tg.showAlert(`Ссылка на игру скопирована! Отправьте её друзьям.`);
       } else {
-        alert(`Код лобби ${lobbyId} скопирован!`);
+        alert(`Ссылка на игру скопирована!`);
       }
     }
   }, [gameState.lobbyId]);

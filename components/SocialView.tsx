@@ -59,7 +59,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
   
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === currentUserId;
-  // Поиск себя в списке игроков и проверка флага Хоста
   const me = gameState.players.find(p => p.id === currentUserId);
   const isMeHost = me?.isHost;
 
@@ -75,12 +74,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
   }, [gameState.history]);
 
   const handleStartGame = async () => {
-    if (isStarting) return;
+    if (isStarting || !isMeHost) return;
     setIsStarting(true);
     try {
       await startGame();
     } catch (e) {
       console.error(e);
+      alert("Не удалось начать игру. Попробуйте еще раз.");
     } finally {
       setIsStarting(false);
     }
@@ -200,7 +200,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
           {BOARD.map((cell, idx) => {
             const occupiers = gameState.players.filter(p => p.position === idx);
             const ownerId = gameState.ownedAssets[idx];
-            const isTarget = occupiers.some(p => p.id === currentUserId);
             const isTurnOwnerAt = occupiers.some(p => p.id === currentPlayer?.id);
             const districtStyle = cell.district ? DISTRICT_COLORS[cell.district] : 'bg-[#0f172a] border-white/5 text-slate-600';
 
@@ -215,7 +214,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
               >
                 <i className={`fa-solid ${cell.icon} text-2xl ${isTurnOwnerAt ? 'text-slate-900' : 'text-inherit'}`}></i>
                 
-                {/* Аватары игроков на клетке */}
                 {occupiers.length > 0 && (
                   <div className="absolute -top-1 -right-1 flex -space-x-2">
                     {occupiers.map(p => (
@@ -265,7 +263,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
         </div>
       </div>
 
-      {/* CELL MODAL (Enhanced) */}
+      {/* CELL MODAL */}
       {selectedCell && (
         <div className="fixed inset-0 z-[1500] flex items-end p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedCell(null)}>
            <div className="w-full p-10 bg-white rounded-[4rem] shadow-2xl space-y-8 animate-slide-up" onClick={e => e.stopPropagation()}>
