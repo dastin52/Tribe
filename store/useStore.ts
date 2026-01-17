@@ -14,7 +14,7 @@ export function useStore() {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     currentPlayerIndex: 0,
-    history: ["Инициализация систем..."],
+    history: ["Система Арена: Онлайн"],
     turnNumber: 1,
     ownedAssets: {},
     reactions: [],
@@ -23,26 +23,40 @@ export function useStore() {
     lastRoll: null
   });
 
-  // Логика Telegram параметров
+  // Логика Telegram параметров - ловим вход по ссылке
   useEffect(() => {
-    if (window.Telegram?.WebApp) {
-      const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param;
-      if (startParam) {
-        // Если зашли по ссылке, сразу прыгаем в социалку
-        setView(AppView.SOCIAL);
-        setGameState(prev => ({ ...prev, lobbyId: startParam }));
-        // Имитируем вход в лобби
-        const newUser: GamePlayer = { 
-          id: user.id, name: user.name, avatar: user.photo_url || '', 
-          position: 0, cash: 50000, isBankrupt: false, deposits: [], 
-          ownedAssets: [] 
-        };
-        setGameState(prev => ({ ...prev, players: [newUser], status: 'lobby' }));
-      }
-    }
-  }, [user]);
+    const checkStartParam = () => {
+      if (window.Telegram?.WebApp) {
+        const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param;
+        if (startParam && gameState.status === 'lobby') {
+          console.log("Вход по инвайту:", startParam);
+          setView(AppView.SOCIAL);
+          
+          const newUser: GamePlayer = { 
+            id: user.id, name: user.name, avatar: user.photo_url || '', 
+            position: 0, cash: 50000, isBankrupt: false, deposits: [], 
+            ownedAssets: [] 
+          };
 
-  // Инициализация лобби для хоста
+          setGameState(prev => {
+            // Проверяем, нет ли уже такого игрока
+            if (prev.players.find(p => p.id === newUser.id)) return { ...prev, lobbyId: startParam };
+            return { 
+              ...prev, 
+              lobbyId: startParam,
+              players: [...prev.players, newUser],
+              history: [`⚡ Подключено к лобби ${startParam}`, ...prev.history]
+            };
+          });
+        }
+      }
+    };
+    
+    // Задержка, чтобы WebApp успел инициализироваться
+    setTimeout(checkStartParam, 500);
+  }, [user.id]);
+
+  // Инициализация лобби для хоста (если не зашли по ссылке)
   useEffect(() => {
     if (gameState.players.length === 0 && !gameState.lobbyId) {
       const host: GamePlayer = { 
@@ -56,14 +70,20 @@ export function useStore() {
         lobbyId: Math.random().toString(36).substring(7) 
       }));
     }
-  }, [user]);
+  }, [user.id]);
 
   const generateInviteLink = () => {
-    const link = `https://t.me/tribe_bot/app?startapp=${gameState.lobbyId}`;
+    // Используем правильный адрес бота @tribe_goals_bot
+    const link = `https://t.me/tribe_goals_bot/app?startapp=${gameState.lobbyId}`;
+    
     if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Вступай в моё Племя на Арене!")}`);
+      // Открываем нативный диалог шаринга в Telegram
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Присоединяйся к моему Племени на Арене! Давай строить капитал вместе 🚀")}`;
+      window.Telegram.WebApp.openTelegramLink(shareUrl);
+    } else {
+      navigator.clipboard.writeText(link);
+      alert("Ссылка скопирована! Отправь её другу в Telegram.");
     }
-    navigator.clipboard.writeText(link);
   };
 
   const joinFakePlayer = () => {
@@ -75,7 +95,7 @@ export function useStore() {
         id: fake.id, name: fake.name, avatar: fake.avatar || '',
         position: 0, cash: 50000, isBankrupt: false, deposits: [], ownedAssets: []
       }],
-      history: [`👤 ${fake.name} вошел на Арену`, ...prev.history]
+      history: [`👤 ${fake.name} присоединился к племени`, ...prev.history]
     }));
   };
 
@@ -89,12 +109,12 @@ export function useStore() {
         const newPos = (currentPlayer.position + roll) % board.length;
         const cell = board[newPos];
         let cashChange = 0;
-        let historyMsg = `${currentPlayer.name} попадает на сектор ${newPos}.`;
+        let historyMsg = `${currentPlayer.name} передвинулся на ${roll} и попал на узел ${newPos}.`;
 
         const rentOwnerId = prev.ownedAssets[newPos];
         if (cell.type === 'asset' && rentOwnerId && rentOwnerId !== currentPlayer.id) {
           cashChange = -(cell.rent || 0);
-          historyMsg += ` Списание аренды: -${cell.rent} XP`;
+          historyMsg += ` Выплачена рента: ${cell.rent} XP.`;
         }
 
         const updatedPlayers = prev.players.map((p, idx) => {
@@ -112,7 +132,7 @@ export function useStore() {
           history: [historyMsg, ...prev.history].slice(0, 10)
         };
       });
-    }, 1200);
+    }, 1500);
   };
 
   const buyAsset = (cellId: number, board: BoardCell[]) => {
@@ -126,7 +146,7 @@ export function useStore() {
         players: prev.players.map((p, idx) => idx === lastIdx ? {
           ...p, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, cellId]
         } : p),
-        history: [`💼 Актив ${cell.id} захвачен игроком ${player.name}`, ...prev.history]
+        history: [`💼 Сектор ${cell.id} теперь под управлением ${player.name}`, ...prev.history]
       }));
     }
   };
