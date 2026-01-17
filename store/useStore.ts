@@ -85,10 +85,6 @@ export function useStore() {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
     const register = async () => {
       try {
-        const tg = (window as any).Telegram?.WebApp;
-        // Если зашли без параметров - мы потенциальный хост
-        const isPotentialHost = !(tg?.initDataUnsafe?.start_param);
-        
         const me: GamePlayer = {
           id: user.id,
           name: user.name,
@@ -96,9 +92,9 @@ export function useStore() {
           position: 0,
           cash: 50000,
           isBankrupt: false,
+          isReady: false,
           deposits: [],
           ownedAssets: [],
-          isHost: isPotentialHost 
         };
         const res = await fetch(`${API_BASE}/join`, {
           method: 'POST',
@@ -124,9 +120,21 @@ export function useStore() {
         const data = await res.json();
         setGameState(prev => ({ ...prev, ...data }));
       } catch (e) {}
-    }, 1500); // Чуть быстрее интервал
+    }, 1500);
     return () => clearInterval(interval);
   }, [gameState.lobbyId]);
+
+  const toggleReady = async () => {
+    const me = gameState.players.find(p => p.id === user.id);
+    if (!me) return;
+    
+    const newReady = !me.isReady;
+    const updatedPlayers = gameState.players.map(p => 
+      p.id === user.id ? { ...p, isReady: newReady } : p
+    );
+
+    await syncWithServer({ players: updatedPlayers });
+  };
 
   const rollDice = async (board: BoardCell[]) => {
     if (gameState.lastRoll) return;
@@ -176,22 +184,11 @@ export function useStore() {
     }
   };
 
-  const startGame = async () => {
-    if (!gameState.lobbyId) return;
-    await syncWithServer({ 
-      status: 'playing', 
-      turnNumber: 1, 
-      currentPlayerIndex: 0,
-      history: ["🚀 Игра началась! Первый ход у Вождя."]
-    });
-  };
-
   const generateInviteLink = useCallback(() => {
     const tg = (window as any).Telegram?.WebApp;
     const lobbyId = gameState.lobbyId;
     if (!lobbyId) return;
     
-    // Бот называется tribe_goals_bot
     const botUser = "tribe_goals_bot"; 
     const inviteUrl = `https://t.me/${botUser}?start=${lobbyId}`;
     const shareText = `Присоединяйся к моей игре в Tribe Arena! 🚀\nКод лобби: ${lobbyId}`;
@@ -207,7 +204,7 @@ export function useStore() {
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
-    rollDice, buyAsset, generateInviteLink, startGame, joinLobbyManual,
+    rollDice, buyAsset, generateInviteLink, toggleReady, joinLobbyManual,
     joinFakePlayer: () => {},
     createDeposit: () => {}, 
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
@@ -219,6 +216,7 @@ export function useStore() {
     updateUserInfo: (data: Partial<User>) => { setUser(p => ({ ...p, ...data })); },
     resetData: () => { window.location.reload(); },
     startMyOwnJourney: () => {},
-    sendReaction: (emoji: string) => {}
+    sendReaction: (emoji: string) => {},
+    startGame: toggleReady // Алиас для совместимости
   };
 }

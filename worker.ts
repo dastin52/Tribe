@@ -25,18 +25,7 @@ export default {
       if (!id) return new Response("No ID", { status: 400 });
       
       const data = await env.TRIBE_KV.get(`lobby:${id}`);
-      let state = data ? JSON.parse(data) : null;
-      
-      // Самоисцеление: если игроки есть, а хоста нет - назначаем первого
-      if (state && state.players && state.players.length > 0) {
-        const hasHost = state.players.some((p: any) => p.isHost === true);
-        if (!hasHost) {
-          state.players[0].isHost = true;
-          await env.TRIBE_KV.put(`lobby:${id}`, JSON.stringify(state), { expirationTtl: 3600 });
-        }
-      }
-
-      return new Response(JSON.stringify(state || { players: [], status: 'lobby', history: [] }), {
+      return new Response(data || JSON.stringify({ players: [], status: 'lobby', history: [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -63,32 +52,28 @@ export default {
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          // Обновляем данные, сохраняя роль
-          const wasHost = state.players[idx].isHost;
-          state.players[idx] = { ...player, isHost: wasHost };
+          // Обновляем данные (сохраняя статус готовности, если он не передан явно)
+          const currentReady = state.players[idx].isReady;
+          state.players[idx] = { ...player, isReady: player.isReady !== undefined ? player.isReady : currentReady };
         } else if (state.players.length < 4) {
-          // Проверяем, есть ли уже хост в лобби
-          const hasHost = state.players.some((p: any) => p.isHost === true);
-          const shouldBeHost = !hasHost; // Если хоста нет, этот игрок им станет
-          
-          state.players.push({ ...player, isHost: shouldBeHost });
-          if (!shouldBeHost) {
-            state.history.unshift(`🤝 ${player.name} присоединился к походу!`);
-          } else {
-            state.history.unshift(`👑 ${player.name} основал новое Племя!`);
-          }
+          state.players.push({ ...player, isReady: false });
+          state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
         }
       }
 
-      // Применение обновлений состояния
+      // Если передано обновление (например, кто-то нажал "Готов")
       if (gameStateUpdate) {
-        // Если обновление содержит статус playing, фиксируем его
         state = { ...state, ...gameStateUpdate };
       }
 
-      // Финальная проверка на наличие хоста перед сохранением
-      if (state.players.length > 0 && !state.players.some((p: any) => p.isHost === true)) {
-        state.players[0].isHost = true;
+      // КРИТИЧЕСКАЯ ЛОГИКА: Автозапуск
+      if (state.status === 'lobby' && state.players.length >= 2) {
+        const allReady = state.players.every((p: any) => p.isReady);
+        if (allReady) {
+          state.status = 'playing';
+          state.currentPlayerIndex = 0;
+          state.history.unshift("🚀 Все готовы! Начинаем битву за капитал!");
+        }
       }
 
       await env.TRIBE_KV.put(key, JSON.stringify(state), { expirationTtl: 3600 });

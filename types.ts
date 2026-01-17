@@ -22,6 +22,7 @@ export interface GamePlayer {
   position: number;
   cash: number;
   isBankrupt: boolean;
+  isReady: boolean;
   deposits: GameDeposit[];
   ownedAssets: number[]; 
   isHost?: boolean;

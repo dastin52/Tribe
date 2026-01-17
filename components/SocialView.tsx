@@ -55,12 +55,11 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
   const [showDiceEffect, setShowDiceEffect] = useState(false);
   const [manualCode, setManualCode] = useState('');
-  const [isStarting, setIsStarting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === currentUserId;
   const me = gameState.players.find(p => p.id === currentUserId);
-  const isMeHost = me?.isHost;
 
   useEffect(() => {
     if (gameState.lastRoll) {
@@ -73,16 +72,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
     return gameState.history[0] || "Племя готово к вызову...";
   }, [gameState.history]);
 
-  const handleStartGame = async () => {
-    if (isStarting || !isMeHost) return;
-    setIsStarting(true);
+  const handleToggleReady = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
     try {
-      await startGame();
-    } catch (e) {
-      console.error(e);
-      alert("Не удалось начать игру. Попробуйте еще раз.");
+      await startGame(); // Это вызывает toggleReady в useStore
     } finally {
-      setIsStarting(false);
+      setIsSyncing(false);
     }
   };
 
@@ -104,14 +100,25 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {gameState.players.map(p => (
-              <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10'}`}>
-                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 ${p.isHost ? 'border-indigo-400' : 'border-slate-700'}`}>
+              <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isReady ? 'border-emerald-500 shadow-emerald-500/20' : 'border-white/10'}`}>
+                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
                   <img src={p.avatar} className="w-full h-full object-cover" onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
                 </div>
                 <div className="text-center">
                   <span className="font-black italic uppercase text-[10px] text-white block truncate w-24">{p.name}</span>
-                  <span className={`text-[7px] font-black uppercase tracking-widest block mt-1 ${p.isHost ? 'text-indigo-400' : 'text-slate-500'}`}>{p.isHost ? 'ВОЖДЬ' : 'СОЮЗНИК'}</span>
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    {p.isReady ? (
+                      <span className="text-[7px] font-black uppercase text-emerald-400">ГОТОВ</span>
+                    ) : (
+                      <span className="text-[7px] font-black uppercase text-slate-500">ЖДЕМ...</span>
+                    )}
+                  </div>
                 </div>
+                {p.isReady && (
+                   <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] text-white shadow-lg">
+                      <i className="fa-solid fa-check"></i>
+                   </div>
+                )}
               </div>
             ))}
           </div>
@@ -121,20 +128,25 @@ export const SocialView: React.FC<SocialViewProps> = ({
               <i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ
             </button>
             
-            {isMeHost ? (
-               <button 
-                disabled={gameState.players.length < 2 || isStarting}
-                onClick={handleStartGame}
-                className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center gap-3"
-              >
-                {isStarting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-play"></i>}
-                {isStarting ? 'ЗАГРУЗКА...' : 'В БОЙ!'}
-              </button>
-            ) : (
-               <div className="w-full py-6 bg-white/5 border border-white/10 rounded-[2rem] text-slate-400 font-black text-[10px] uppercase tracking-widest text-center italic animate-pulse">
-                 Ждем команды Вождя...
-               </div>
-            )}
+            <button 
+              onClick={handleToggleReady}
+              className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${
+                me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'
+              }`}
+            >
+              {isSyncing ? (
+                <i className="fa-solid fa-circle-notch fa-spin"></i>
+              ) : me?.isReady ? (
+                <i className="fa-solid fa-clock-rotate-left"></i>
+              ) : (
+                <i className="fa-solid fa-check-double"></i>
+              )}
+              {isSyncing ? 'СИНХРОНИЗАЦИЯ...' : me?.isReady ? 'ЖДЕМ ОСТАЛЬНЫХ' : 'Я ГОТОВ'}
+            </button>
+          </div>
+          
+          <div className="relative z-10 text-[9px] font-bold text-slate-500 uppercase tracking-widest italic text-center px-4">
+             Игра начнется автоматически, как только все нажмут «Готов» (мин. 2 игрока).
           </div>
         </div>
         
