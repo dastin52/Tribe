@@ -57,12 +57,22 @@ const App: React.FC = () => {
   const financials = store.user.financials || { total_assets: 0, total_debts: 0, monthly_income: 0, monthly_expenses: 0, currency: '₽' };
   const netWorth = financials.total_assets - financials.total_debts;
 
+  // Улучшенная генерация истории баланса с названиями месяцев
   const balanceHistory = useMemo(() => {
+    const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+    const currentMonth = new Date().getMonth();
+    const history = [];
     const base = netWorth;
-    return Array.from({length: 10}).map((_, i) => ({
-      date: i,
-      balance: base - (10 - i) * (Math.random() * 5000) + (Math.random() * 2000)
-    }));
+
+    for (let i = 6; i >= 0; i--) {
+      const monthIdx = (currentMonth - i + 12) % 12;
+      history.push({
+        date: months[monthIdx],
+        // Эмулируем реалистичный рост с небольшими колебаниями
+        balance: Math.round(base - (i * (base * 0.05)) + (Math.random() * (base * 0.02)))
+      });
+    }
+    return history;
   }, [netWorth]);
 
   const ikigaiData = useMemo(() => {

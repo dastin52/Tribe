@@ -35,6 +35,21 @@ interface FinanceViewProps {
   goals: YearGoal[];
 }
 
+// Кастомный компонент тултипа для исправления ошибки с дробными числами
+const CustomChartTooltip = ({ active, payload, label, currency }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl animate-fade-in">
+        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">{label}</p>
+        <p className="text-sm font-black text-white italic">
+          {Math.round(payload[0].value).toLocaleString()} {currency}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 export const FinanceView: React.FC<FinanceViewProps> = ({ 
   financials, transactions, debts, subscriptions, balanceVisible, setBalanceVisible, netWorth, balanceHistory, onAddTransaction, onAddDebt, onAddSubscription, goals 
 }) => {
@@ -250,12 +265,27 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                <div className="absolute top-10 right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Общий капитал</span>
                <div className="text-5xl font-black tracking-tighter italic my-4 leading-none">{formatVal(netWorth)}</div>
-               <div className={`h-24 w-full mt-4 -mx-4 ${balanceVisible ? '' : 'blur-md opacity-20'}`}>
+               <div className={`h-40 w-full mt-4 -mx-4 ${balanceVisible ? '' : 'blur-md opacity-20'}`}>
                   <ResponsiveContainer width="100%" height="100%">
-                     <AreaChart data={balanceHistory} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                     <AreaChart data={balanceHistory} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
                         <defs><linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#818cf8" stopOpacity={0.4}/><stop offset="95%" stopColor="#818cf8" stopOpacity={0}/></linearGradient></defs>
-                        <Tooltip />
-                        <Area type="monotone" dataKey="balance" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#colorNet)" />
+                        <XAxis 
+                          dataKey="date" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 9, fontWeight: 800, fill: '#64748b' }} 
+                          dy={10}
+                        />
+                        <Tooltip content={<CustomChartTooltip currency={financials.currency} />} cursor={{ stroke: '#4f46e5', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                        <Area 
+                          type="monotone" 
+                          dataKey="balance" 
+                          stroke="#818cf8" 
+                          strokeWidth={3} 
+                          fillOpacity={1} 
+                          fill="url(#colorNet)" 
+                          animationDuration={1500}
+                        />
                      </AreaChart>
                   </ResponsiveContainer>
                </div>
