@@ -38,7 +38,6 @@ export function useStore() {
     tg.ready();
     tg.expand();
 
-    // Захватываем пользователя
     if (tg.initDataUnsafe?.user) {
       const u = tg.initDataUnsafe.user;
       setUser(prev => ({
@@ -49,14 +48,11 @@ export function useStore() {
       }));
     }
 
-    // Обработка глубокой ссылки (startapp)
     const startParam = tg.initDataUnsafe?.start_param;
     if (startParam) {
-      console.log("Found start_param:", startParam);
-      setGameState(prev => ({ ...prev, lobbyId: startParam }));
+      setGameState(prev => ({ ...prev, lobbyId: startParam.toUpperCase() }));
       setView(AppView.SOCIAL);
     } else {
-      // Если зашли просто так - генерируем новый ID только если его еще нет
       setGameState(prev => {
         if (!prev.lobbyId) {
           return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
@@ -68,7 +64,6 @@ export function useStore() {
 
   // 2. Регистрация в лобби
   useEffect(() => {
-    // Ждем, пока у нас будет и Lobby ID, и реальный ID пользователя (не анонимный)
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
 
     const register = async () => {
@@ -103,7 +98,7 @@ export function useStore() {
     register();
   }, [user.id, gameState.lobbyId]);
 
-  // 3. Быстрый опрос лобби (Polling)
+  // 3. Поллинг лобби
   useEffect(() => {
     if (!gameState.lobbyId) return;
 
@@ -117,7 +112,6 @@ export function useStore() {
         
         if (data && data.players) {
           setGameState(prev => {
-            // Сравниваем игроков по ID для минимизации обновлений реакта
             const oldIds = prev.players.map(p => p.id).join(',');
             const newIds = data.players.map((p: any) => p.id).join(',');
             
@@ -131,19 +125,31 @@ export function useStore() {
           });
         }
       } catch (e) {}
-    }, 2000); // Ускорили до 2 сек для отзывчивости
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [gameState.lobbyId]);
 
+  // Функция для ручного ввода кода
+  const joinLobbyManual = (code: string) => {
+    const formattedCode = code.trim().toUpperCase();
+    if (formattedCode.length >= 4) {
+      setGameState(prev => ({ 
+        ...prev, 
+        lobbyId: formattedCode, 
+        players: [], // Сбрасываем текущих игроков, чтобы загрузить новых из API
+        status: 'lobby' 
+      }));
+      setView(AppView.SOCIAL);
+    }
+  };
+
   const generateInviteLink = () => {
     const botUsername = "tribe_goals_bot"; 
-    // Если вы назвали приложение в BotFather НЕ "app", замените "/app" на "/ваше_имя"
     const link = `https://t.me/${botUsername}/app?startapp=${gameState.lobbyId}`;
     
     if (window.Telegram?.WebApp) {
-      // Используем нативный шаринг Telegram
-      const shareText = "Вступай в моё Племя! Построим капитал вместе 🚀";
+      const shareText = `Вступай в моё Племя! Мой код лобби: ${gameState.lobbyId} 🚀`;
       const fullUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`;
       window.Telegram.WebApp.openTelegramLink(fullUrl);
     }
@@ -196,7 +202,7 @@ export function useStore() {
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
-    rollDice, buyAsset, generateInviteLink, startGame,
+    rollDice, buyAsset, generateInviteLink, startGame, joinLobbyManual,
     joinFakePlayer: () => {},
     createDeposit: () => {}, 
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },

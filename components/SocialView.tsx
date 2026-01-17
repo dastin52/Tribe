@@ -45,11 +45,15 @@ interface SocialViewProps {
   generateInviteLink: () => void;
   joinFakePlayer: () => void;
   startGame: () => void;
+  joinLobbyManual: (code: string) => void;
 }
 
-export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame }) => {
+export const SocialView: React.FC<SocialViewProps> = ({ 
+  gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual 
+}) => {
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
   const [showDiceEffect, setShowDiceEffect] = useState(false);
+  const [manualCode, setManualCode] = useState('');
   
   const isMeHost = gameState.players.length > 0 && gameState.players[0].isHost;
 
@@ -60,51 +64,73 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
     }
   }, [gameState.lastRoll]);
 
+  const handleManualJoin = () => {
+    if (manualCode.length >= 4) {
+      joinLobbyManual(manualCode);
+      setManualCode('');
+    }
+  };
+
+  const copyLobbyId = () => {
+    if (gameState.lobbyId) {
+      navigator.clipboard.writeText(gameState.lobbyId);
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+      }
+    }
+  };
+
   if (gameState.status === 'lobby') {
     return (
-      <div className="flex flex-col min-h-full animate-fade-in p-2">
-        <div className="bg-[#020617] rounded-[3.5rem] border-4 border-[#1e293b] p-8 space-y-10 relative overflow-hidden shadow-2xl flex flex-col items-center">
+      <div className="flex flex-col min-h-full animate-fade-in p-2 space-y-4">
+        {/* Лобби Блок */}
+        <div className="bg-[#020617] rounded-[3.5rem] border-4 border-[#1e293b] p-8 space-y-8 relative overflow-hidden shadow-2xl flex flex-col items-center">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.15),transparent)]"></div>
           
           <div className="relative z-10 text-center space-y-4 w-full">
-            <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto border-4 border-white/10">
+            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.2rem] flex items-center justify-center text-3xl shadow-[0_0_30px_rgba(99,102,241,0.3)] mx-auto border-4 border-white/10">
               <i className="fa-solid fa-users-rays text-white"></i>
             </div>
-            <h2 className="text-5xl font-black italic text-white uppercase tracking-tighter">ПЛЕМЯ</h2>
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic">СИНХРОНИЗАЦИЯ...</span>
+            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter">ПЛЕМЯ</h2>
+            
+            <button 
+              onClick={copyLobbyId}
+              className="flex flex-col items-center gap-2 group active:scale-95 transition-all mx-auto"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] italic">СИНХРОНИЗАЦИЯ...</span>
               </div>
-              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic bg-indigo-500/10 px-3 py-1 rounded-full">LOBBY ID: {gameState.lobbyId}</p>
-            </div>
+              <div className="bg-indigo-500/10 px-4 py-2 rounded-full border border-indigo-500/20 flex items-center gap-2">
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic">ID: {gameState.lobbyId}</span>
+                <i className="fa-solid fa-copy text-indigo-400/50 text-[10px]"></i>
+              </div>
+            </button>
           </div>
 
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {gameState.players.map(p => (
-              <div key={p.id} className={`p-6 bg-white/5 backdrop-blur-xl border rounded-[2.5rem] flex flex-col items-center gap-4 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500/50 shadow-indigo-500/10' : 'border-white/10'}`}>
-                <div className={`w-20 h-20 rounded-[1.8rem] overflow-hidden border-2 ${p.isHost ? 'border-indigo-400 shadow-[0_0_20px_rgba(129,140,248,0.5)]' : 'border-slate-700'}`}>
+              <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500/50 shadow-indigo-500/10' : 'border-white/10'}`}>
+                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 ${p.isHost ? 'border-indigo-400 shadow-[0_0_15px_rgba(129,140,248,0.4)]' : 'border-slate-700'}`}>
                   <img src={p.avatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`; }} />
                 </div>
                 <div className="text-center w-full px-2">
-                  <span className="font-black italic uppercase text-[11px] text-white block truncate">{p.name}</span>
-                  <div className="flex items-center justify-center gap-1 mt-1">
-                    <span className={`text-[8px] font-black uppercase tracking-widest block ${p.isHost ? 'text-indigo-400' : 'text-slate-500'}`}>{p.isHost ? 'ВОЖДЬ' : 'СОЮЗНИК'}</span>
-                  </div>
+                  <span className="font-black italic uppercase text-[10px] text-white block truncate">{p.name}</span>
+                  <span className={`text-[7px] font-black uppercase tracking-widest block mt-0.5 ${p.isHost ? 'text-indigo-400' : 'text-slate-500'}`}>{p.isHost ? 'ВОЖДЬ' : 'СОЮЗНИК'}</span>
                 </div>
               </div>
             ))}
             {Array.from({ length: Math.max(0, 4 - gameState.players.length) }).map((_, i) => (
-              <div key={i} className="p-6 bg-white/5 border border-dashed border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 opacity-10">
-                <i className="fa-solid fa-user-plus text-slate-400 text-xl"></i>
+              <div key={i} className="p-5 bg-white/5 border border-dashed border-white/10 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 opacity-10">
+                <i className="fa-solid fa-user-plus text-slate-400 text-lg"></i>
               </div>
             ))}
           </div>
 
-          <div className="w-full space-y-4 pt-4 relative z-10">
+          <div className="w-full space-y-3 pt-2 relative z-10">
             <button 
               onClick={generateInviteLink}
-              className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] shadow-[0_15px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-4"
+              className="w-full py-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.25em] shadow-[0_10px_30px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3"
             >
               <i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ
             </button>
@@ -113,16 +139,47 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
                <button 
                 disabled={gameState.players.length < 2}
                 onClick={startGame}
-                className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-20"
+                className="w-full py-5 bg-white text-slate-900 rounded-[1.8rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all disabled:opacity-20"
               >
                 В БОЙ!
               </button>
             ) : (
-               <div className="w-full py-6 bg-white/5 border border-white/10 rounded-[2rem] text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] text-center italic">
+               <div className="w-full py-5 bg-white/5 border border-white/10 rounded-[1.8rem] text-slate-400 font-black text-[9px] uppercase tracking-[0.25em] text-center italic">
                  Ждем команды Вождя...
                </div>
             )}
           </div>
+        </div>
+
+        {/* Ручной ввод кода - План Б */}
+        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
+           <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white text-xs">
+                 <i className="fa-solid fa-key"></i>
+              </div>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Вступить в Племя по коду</h3>
+           </div>
+           
+           <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Введи ID..."
+                maxLength={6}
+                value={manualCode}
+                onChange={e => setManualCode(e.target.value.toUpperCase())}
+                className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-sm uppercase tracking-widest outline-none focus:border-indigo-500 transition-all placeholder:text-slate-300"
+              />
+              <button 
+                onClick={handleManualJoin}
+                disabled={manualCode.length < 4}
+                className="px-6 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest disabled:opacity-10 active:scale-95 transition-all"
+              >
+                ВСТУПИТЬ
+              </button>
+           </div>
+           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight text-center italic">
+             Используй этот способ, если ссылка открыла только чат с ботом
+           </p>
         </div>
       </div>
     );

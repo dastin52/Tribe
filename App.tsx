@@ -55,7 +55,7 @@ const App: React.FC = () => {
     return (
       <div className="h-full bg-white flex flex-col items-center justify-center p-10 text-center animate-fade-in relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-50 to-white opacity-40"></div>
-        <div className="relative z-10 space-y-12 w-full max-w-sm">
+        <div className="relative z-10 space-y-12 w-full max-sm:max-w-xs">
           <div className="space-y-6">
             <div className="w-24 h-24 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white text-4xl mx-auto shadow-2xl rotate-3">
               <i className="fa-solid fa-mountain-sun"></i>
@@ -92,11 +92,10 @@ const App: React.FC = () => {
           gameState={store.gameState}
           rollDice={store.rollDice}
           buyAsset={store.buyAsset}
-          createDeposit={store.createDeposit}
-          sendReaction={store.sendReaction}
           generateInviteLink={store.generateInviteLink}
           joinFakePlayer={store.joinFakePlayer}
           startGame={store.startGame}
+          joinLobbyManual={store.joinLobbyManual}
         />
       )}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
