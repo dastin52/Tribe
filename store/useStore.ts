@@ -6,44 +6,47 @@ import { INITIAL_USER, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_TR
 const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
 
 export function useStore() {
+  // Инициализируем пользователя со случайным ID
   const [user, setUser] = useState<User>(() => ({
     ...INITIAL_USER,
     id: 'anon-' + Math.random().toString(36).substring(2, 9)
   }));
   
-  const [view, setView] = useState<AppView>(AppView.LANDING);
+  // Инициализируем вид сразу из параметров Telegram, чтобы избежать мигания Landing
+  const [view, setView] = useState<AppView>(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.initDataUnsafe?.start_param) {
+      return AppView.SOCIAL;
+    }
+    return AppView.LANDING;
+  });
+
   const [goals, setGoals] = useState<YearGoal[]>(SAMPLE_GOALS);
   const [subgoals, setSubgoals] = useState<SubGoal[]>(SAMPLE_SUBGOALS);
   const [partners, setPartners] = useState(SAMPLE_PARTNERS);
   const [transactions, setTransactions] = useState<Transaction[]>(SAMPLE_TRANSACTIONS);
   
-  const [gameState, setGameState] = useState<GameState>({
-    players: [],
-    currentPlayerIndex: 0,
-    history: ["Инициализация лобби..."],
-    turnNumber: 1,
-    ownedAssets: {},
-    reactions: [],
-    lobbyId: null,
-    status: 'lobby',
-    lastRoll: null
+  const [gameState, setGameState] = useState<GameState>(() => {
+    const tg = window.Telegram?.WebApp;
+    const startParam = tg?.initDataUnsafe?.start_param;
+    return {
+      players: [],
+      currentPlayerIndex: 0,
+      history: ["Инициализация..."],
+      turnNumber: 1,
+      ownedAssets: {},
+      reactions: [],
+      lobbyId: startParam || null,
+      status: 'lobby',
+      lastRoll: null
+    };
   });
 
-  // 1. Инициализация Telegram данных
+  // 1. Синхронизация данных пользователя из Telegram
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (tg) {
       tg.ready();
-      
-      let finalLobbyId = null;
-      
-      // Обработка параметров входа (startapp)
-      if (tg.initDataUnsafe?.start_param) {
-        finalLobbyId = tg.initDataUnsafe.start_param;
-        setView(AppView.SOCIAL);
-      }
-
-      // Обработка данных пользователя
       if (tg.initDataUnsafe?.user) {
         const u = tg.initDataUnsafe.user;
         setUser(prev => ({
@@ -53,15 +56,18 @@ export function useStore() {
           photo_url: u.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.first_name)}&background=6366f1&color=fff`
         }));
       }
-
-      setGameState(prev => ({
-        ...prev,
-        lobbyId: finalLobbyId || prev.lobbyId || Math.random().toString(36).substring(2, 7)
-      }));
+      
+      // Если Lobby ID всё еще нет (не по ссылке), генерируем свой
+      setGameState(prev => {
+        if (!prev.lobbyId) {
+          return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7) };
+        }
+        return prev;
+      });
     }
   }, []);
 
-  // 2. Регистрация в лобби
+  // 2. Регистрация в лобби (только когда есть и пользователь, и лобби)
   useEffect(() => {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
 
@@ -92,7 +98,7 @@ export function useStore() {
     register();
   }, [user.id, gameState.lobbyId]);
 
-  // 3. Поллинг (опрос) состояния
+  // 3. Опрос состояния (Polling)
   useEffect(() => {
     if (!gameState.lobbyId) return;
 
@@ -101,14 +107,16 @@ export function useStore() {
       
       try {
         const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
+        if (!res.ok) return;
         const data = await res.json();
         
         if (data && data.players) {
           setGameState(prev => {
-            // Предотвращаем лишние ререндеры если данные не изменились
-            if (JSON.stringify(prev.players) === JSON.stringify(data.players) && prev.status === data.status) {
-              return prev;
-            }
+            const playersChanged = JSON.stringify(prev.players) !== JSON.stringify(data.players);
+            const statusChanged = prev.status !== data.status;
+            
+            if (!playersChanged && !statusChanged) return prev;
+            
             return {
               ...prev,
               players: data.players,
@@ -117,7 +125,7 @@ export function useStore() {
           });
         }
       } catch (e) {
-        console.error("Polling error", e);
+        // Ошибка сети или API
       }
     }, 3000);
 
