@@ -1,7 +1,7 @@
 
 /**
- * Этот файл нужно деплоить как отдельный Cloudflare Worker.
- * Обеспечивает синхронизацию лобби и состояния игры.
+ * Cloudflare Worker для Tribe Arena.
+ * Обеспечивает синхронизацию всех аспектов игры между игроками.
  */
 
 interface Env {
@@ -19,49 +19,61 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-    // Эндпоинт получения данных лобби
+    // Получение полного состояния игры
     if (url.pathname === "/lobby" && request.method === "GET") {
       const id = url.searchParams.get("id");
       if (!id) return new Response("No ID", { status: 400 });
       
       const data = await env.TRIBE_KV.get(`lobby:${id}`);
-      return new Response(data || JSON.stringify({ players: [], status: 'lobby' }), {
+      return new Response(data || JSON.stringify({ players: [], status: 'lobby', currentPlayerIndex: 0, history: [], ownedAssets: {} }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Эндпоинт входа в лобби или обновления статуса
+    // Обновление состояния или вход
     if (url.pathname === "/join" && request.method === "POST") {
       const body = await request.json();
-      const { lobbyId, player, status } = body;
+      const { lobbyId, player, status, gameStateUpdate } = body;
       
       if (!lobbyId) return new Response("No Lobby ID", { status: 400 });
       
       const key = `lobby:${lobbyId}`;
       let data = await env.TRIBE_KV.get(key);
-      let lobby = data ? JSON.parse(data) : { players: [], status: 'lobby' };
+      let state = data ? JSON.parse(data) : { 
+        players: [], 
+        status: 'lobby', 
+        currentPlayerIndex: 0, 
+        history: ["Племя собирается..."], 
+        ownedAssets: {},
+        turnNumber: 1
+      };
       
-      // Если передан игрок — добавляем или обновляем его
+      // Если это вход нового игрока
       if (player && player.id) {
-        const idx = lobby.players.findIndex((p: any) => p.id === player.id);
+        const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          lobby.players[idx] = { ...lobby.players[idx], ...player };
-        } else {
-          // Ограничиваем лобби 4 игроками
-          if (lobby.players.length < 4) {
-            lobby.players.push(player);
-          }
+          state.players[idx] = { ...state.players[idx], ...player };
+        } else if (state.players.length < 4) {
+          state.players.push(player);
         }
       }
 
-      // Если передана смена статуса (например, старт игры)
+      // Если это обновление статуса (старт игры)
       if (status) {
-        lobby.status = status;
+        state.status = status;
+        if (status === 'playing') {
+          state.history.unshift("Игра началась! Удачи, союзники.");
+        }
       }
 
-      await env.TRIBE_KV.put(key, JSON.stringify(lobby), { expirationTtl: 3600 });
+      // Если это игровое действие (бросок, покупка)
+      if (gameStateUpdate) {
+        state = { ...state, ...gameStateUpdate };
+      }
+
+      await env.TRIBE_KV.put(key, JSON.stringify(state), { expirationTtl: 3600 });
       
-      return new Response(JSON.stringify(lobby), {
+      return new Response(JSON.stringify(state), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

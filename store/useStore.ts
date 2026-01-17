@@ -1,9 +1,17 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { User, AppView, GameState, GamePlayer, BoardCell, GameDeposit, YearGoal, SubGoal, Transaction } from '../types';
+import { User, AppView, GameState, GamePlayer, BoardCell, YearGoal, SubGoal, Transaction } from '../types';
 import { INITIAL_USER, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_TRANSACTIONS } from './initialData';
 
 const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
+
+const EVENTS = [
+  { title: "Грант от Племени", text: "Твой проект заметили! Получи +15,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: p.cash + 15000 }) },
+  { title: "Технический сбой", text: "Сервер упал в неподходящий момент. Потеря -8,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: Math.max(0, p.cash - 8000) }) },
+  { title: "Бычий рынок", text: "Активы растут! Все владельцы получают по +5,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: p.cash + 5000 }) },
+  { title: "Налоговая проверка", text: "Нужно заплатить за прозрачность. -10,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: Math.max(0, p.cash - 10000) }) },
+  { title: "Инсайд", text: "Ты узнал секрет рынка. Получи +12,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: p.cash + 12000 }) }
+];
 
 export function useStore() {
   const [user, setUser] = useState<User>(() => ({
@@ -12,7 +20,6 @@ export function useStore() {
   }));
   
   const [view, setView] = useState<AppView>(AppView.LANDING);
-
   const [goals, setGoals] = useState<YearGoal[]>(SAMPLE_GOALS);
   const [subgoals, setSubgoals] = useState<SubGoal[]>(SAMPLE_SUBGOALS);
   const [partners, setPartners] = useState(SAMPLE_PARTNERS);
@@ -21,7 +28,7 @@ export function useStore() {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     currentPlayerIndex: 0,
-    history: ["Инициализация..."],
+    history: ["Синхронизация..."],
     turnNumber: 1,
     ownedAssets: {},
     reactions: [],
@@ -30,14 +37,26 @@ export function useStore() {
     lastRoll: null
   });
 
-  // 1. Первичная настройка при загрузке
+  // Синхронизация с сервером (Push)
+  const syncWithServer = async (update: Partial<GameState>) => {
+    if (!gameState.lobbyId) return;
+    try {
+      const res = await fetch(`${API_BASE}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lobbyId: gameState.lobbyId, gameStateUpdate: update })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGameState(prev => ({ ...prev, ...data }));
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
-
     tg.ready();
-    tg.expand();
-
     if (tg.initDataUnsafe?.user) {
       const u = tg.initDataUnsafe.user;
       setUser(prev => ({
@@ -54,18 +73,14 @@ export function useStore() {
       setView(AppView.SOCIAL);
     } else {
       setGameState(prev => {
-        if (!prev.lobbyId) {
-          return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
-        }
+        if (!prev.lobbyId) return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
         return prev;
       });
     }
   }, []);
 
-  // 2. Регистрация в лобби
   useEffect(() => {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
-
     const register = async () => {
       try {
         const me: GamePlayer = {
@@ -79,67 +94,94 @@ export function useStore() {
           ownedAssets: [],
           isHost: !window.Telegram?.WebApp?.initDataUnsafe?.start_param
         };
-
         const res = await fetch(`${API_BASE}/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lobbyId: gameState.lobbyId, player: me })
         });
-        
         if (res.ok) {
           const data = await res.json();
-          setGameState(prev => ({ ...prev, players: data.players, status: data.status }));
+          setGameState(prev => ({ ...prev, ...data }));
         }
-      } catch (e) {
-        console.error("Join error:", e);
-      }
+      } catch (e) {}
     };
-
     register();
   }, [user.id, gameState.lobbyId]);
 
-  // 3. Поллинг лобби
   useEffect(() => {
     if (!gameState.lobbyId) return;
-
     const interval = setInterval(async () => {
       if (document.hidden) return;
-      
       try {
         const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
         if (!res.ok) return;
         const data = await res.json();
-        
-        if (data && data.players) {
-          setGameState(prev => {
-            const oldIds = prev.players.map(p => p.id).join(',');
-            const newIds = data.players.map((p: any) => p.id).join(',');
-            
-            if (oldIds === newIds && prev.status === data.status) return prev;
-            
-            return {
-              ...prev,
-              players: data.players,
-              status: data.status || prev.status
-            };
-          });
-        }
+        setGameState(prev => {
+          if (JSON.stringify(prev) === JSON.stringify({ ...prev, ...data })) return prev;
+          return { ...prev, ...data };
+        });
       } catch (e) {}
     }, 2000);
-
     return () => clearInterval(interval);
   }, [gameState.lobbyId]);
 
-  // Функция для ручного ввода кода
+  const rollDice = async (board: BoardCell[]) => {
+    if (gameState.lastRoll) return;
+    const roll = Math.floor(Math.random() * 6) + 1;
+    
+    // Сначала локальная анимация для отзывчивости
+    setGameState(prev => ({ ...prev, lastRoll: roll }));
+
+    setTimeout(async () => {
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      const newPos = (currentPlayer.position + roll) % board.length;
+      const cell = board[newPos];
+      
+      let newPlayers = [...gameState.players];
+      let newHistory = [`${currentPlayer.name} выбросил ${roll} и перешел на ${cell.title}`, ...gameState.history];
+      
+      // Логика событий
+      if (cell.type === 'event' || cell.type === 'tax') {
+        const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+        newPlayers = newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? event.effect(p) : p);
+        newHistory.unshift(`СОБЫТИЕ: ${event.title}! ${event.text}`);
+      }
+
+      const update = {
+        players: newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? { ...p, position: newPos } : p),
+        lastRoll: null,
+        currentPlayerIndex: (gameState.currentPlayerIndex + 1) % gameState.players.length,
+        turnNumber: gameState.turnNumber + 1,
+        history: newHistory.slice(0, 15)
+      };
+
+      await syncWithServer(update);
+    }, 2000);
+  };
+
+  const buyAsset = async (cellId: number, board: BoardCell[]) => {
+    const playerIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
+    const player = gameState.players[playerIdx];
+    const cell = board[cellId];
+
+    if (player && player.cash >= (cell.cost || 0) && !gameState.ownedAssets[cellId]) {
+      const update = {
+        ownedAssets: { ...gameState.ownedAssets, [cellId]: player.id },
+        players: gameState.players.map((p, idx) => idx === playerIdx ? { 
+          ...p, 
+          cash: p.cash - (cell.cost || 0), 
+          ownedAssets: [...p.ownedAssets, cellId] 
+        } : p),
+        history: [`${player.name} захватил сектор ${cell.title}!`, ...gameState.history].slice(0, 15)
+      };
+      await syncWithServer(update);
+    }
+  };
+
   const joinLobbyManual = (code: string) => {
     const formattedCode = code.trim().toUpperCase();
     if (formattedCode.length >= 4) {
-      setGameState(prev => ({ 
-        ...prev, 
-        lobbyId: formattedCode, 
-        players: [], // Сбрасываем текущих игроков, чтобы загрузить новых из API
-        status: 'lobby' 
-      }));
+      setGameState(prev => ({ ...prev, lobbyId: formattedCode, players: [], status: 'lobby' }));
       setView(AppView.SOCIAL);
     }
   };
@@ -147,57 +189,15 @@ export function useStore() {
   const generateInviteLink = () => {
     const botUsername = "tribe_goals_bot"; 
     const link = `https://t.me/${botUsername}/app?startapp=${gameState.lobbyId}`;
-    
     if (window.Telegram?.WebApp) {
-      const shareText = `Вступай в моё Племя! Мой код лобби: ${gameState.lobbyId} 🚀`;
-      const fullUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`;
-      window.Telegram.WebApp.openTelegramLink(fullUrl);
+      const shareText = `Вступай в моё Племя! Код лобби: ${gameState.lobbyId} 🚀`;
+      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
     }
   };
 
   const startGame = async () => {
     if (!gameState.lobbyId) return;
-    try {
-      await fetch(`${API_BASE}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lobbyId: gameState.lobbyId, status: 'playing' })
-      });
-      setGameState(prev => ({ ...prev, status: 'playing' }));
-    } catch (e) {}
-  };
-
-  const rollDice = (board: BoardCell[]) => {
-    if (gameState.lastRoll) return;
-    const roll = Math.floor(Math.random() * 6) + 1;
-    setGameState(prev => ({ ...prev, lastRoll: roll }));
-    setTimeout(() => {
-      setGameState(prev => {
-        const currentPlayer = prev.players[prev.currentPlayerIndex];
-        if (!currentPlayer) return prev;
-        const newPos = (currentPlayer.position + roll) % board.length;
-        return {
-          ...prev,
-          players: prev.players.map((p, idx) => idx === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
-          lastRoll: null,
-          currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
-          turnNumber: prev.turnNumber + 1,
-          history: [`${currentPlayer.name} перешел на ${board[newPos].title}`, ...prev.history].slice(0, 10)
-        };
-      });
-    }, 1500);
-  };
-
-  const buyAsset = (cellId: number, board: BoardCell[]) => {
-    const lastIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
-    const player = gameState.players[lastIdx];
-    if (player && player.cash >= (board[cellId].cost || 0) && !gameState.ownedAssets[cellId]) {
-      setGameState(prev => ({
-        ...prev,
-        ownedAssets: { ...prev.ownedAssets, [cellId]: player.id },
-        players: prev.players.map((p, idx) => idx === lastIdx ? { ...p, cash: p.cash - (board[cellId].cost || 0), ownedAssets: [...p.ownedAssets, cellId] } : p)
-      }));
-    }
+    await syncWithServer({ status: 'playing', turnNumber: 1, currentPlayerIndex: 0 });
   };
 
   return {

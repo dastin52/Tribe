@@ -96,6 +96,7 @@ const App: React.FC = () => {
           joinFakePlayer={store.joinFakePlayer}
           startGame={store.startGame}
           joinLobbyManual={store.joinLobbyManual}
+          currentUserId={store.user.id}
         />
       )}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
