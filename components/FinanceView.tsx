@@ -35,7 +35,6 @@ interface FinanceViewProps {
   goals: YearGoal[];
 }
 
-// Кастомный компонент тултипа для исправления ошибки с дробными числами
 const CustomChartTooltip = ({ active, payload, label, currency }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -59,7 +58,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [aiBudgetAdvice, setAiBudgetAdvice] = useState<string | null>(null);
   const [loadingAdvice, setLoadingAdvice] = useState(false);
 
-  // Состояния для форм добавления
   const [formData, setFormData] = useState({
     amount: '',
     title: '',
@@ -69,7 +67,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     period: 'monthly' as 'monthly' | 'yearly'
   });
 
-  // Состояние планировщика
   const [plannedIncome, setPlannedIncome] = useState(financials.monthly_income || 170000);
   const [budgetStructure, setBudgetStructure] = useState<BudgetCategory[]>([
     { name: 'Аренда/Ипотека', percent: 25, group: 'essential', realCategory: 'Жилье' },
@@ -116,7 +113,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleUpdatePercent = (index: number, val: string) => {
     const newBudget = [...budgetStructure];
-    newBudget[index].percent = parseInt(val) || 0;
+    // Если строка пустая, записываем 0, но в инпуте это позволит стереть цифру
+    newBudget[index].percent = val === '' ? 0 : Math.max(0, parseInt(val));
     setBudgetStructure(newBudget);
   };
 
@@ -230,7 +228,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 {activeTab === 'debts' && (
                   <div className="flex gap-2">
                     <button onClick={() => setFormData({...formData, debtType: 'i_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'i_owe' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Я должен</button>
-                    <button onClick={() => setFormData({...formData, debtType: 'they_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'they_owe' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Мне должны</button>
+                    <button onClick={() => setFormData({...formData, debtType: 'they_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'they_owe' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>Мне должны</button>
                   </div>
                 )}
 
@@ -315,8 +313,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1">Планируемый доход</span>
                         <input 
                           type="number" 
-                          value={plannedIncome}
-                          onChange={e => setPlannedIncome(parseInt(e.target.value) || 0)}
+                          placeholder="0"
+                          value={plannedIncome === 0 ? '' : plannedIncome}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setPlannedIncome(val === '' ? 0 : Math.max(0, parseInt(val)));
+                          }}
                           className="bg-transparent text-xl font-black text-indigo-900 outline-none w-32 border-b-2 border-indigo-200 focus:border-indigo-600 transition-colors"
                         />
                      </div>
@@ -352,7 +354,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                        <div className="flex items-center gap-1">
                                           <input 
                                             type="number" 
-                                            value={item.percent}
+                                            placeholder="0"
+                                            value={item.percent === 0 ? '' : item.percent}
                                             onChange={e => handleUpdatePercent(index, e.target.value)}
                                             className="w-10 text-right bg-transparent font-black text-xs outline-none"
                                           />
