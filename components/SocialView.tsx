@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { GameState, BoardCell, GamePlayer } from '../types';
 
 const DISTRICT_COLORS: Record<string, string> = {
-  tech: 'border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.3)]',
-  realestate: 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)]',
-  health: 'border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.3)]',
-  energy: 'border-rose-400 shadow-[0_0_15px_rgba(251,113,133,0.3)]',
-  web3: 'border-violet-400 shadow-[0_0_15px_rgba(167,139,250,0.3)]',
-  edu: 'border-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.3)]'
+  tech: 'border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.3)] text-cyan-400',
+  realestate: 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.3)] text-amber-400',
+  health: 'border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.3)] text-emerald-400',
+  energy: 'border-rose-400 shadow-[0_0_15px_rgba(251,113,133,0.3)] text-rose-400',
+  web3: 'border-violet-400 shadow-[0_0_15px_rgba(167,139,250,0.3)] text-violet-400',
+  edu: 'border-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.3)] text-blue-400'
 };
 
 const BOARD: BoardCell[] = ([
@@ -51,6 +51,9 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
   const [showDiceEffect, setShowDiceEffect] = useState(false);
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+  
+  // Является ли текущий реальный пользователь хостом
+  const isMeHost = gameState.players.find(p => p.isHost)?.id === 'demo-user' || gameState.players[0]?.isHost;
 
   useEffect(() => {
     if (gameState.lastRoll) {
@@ -65,32 +68,38 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
         <div className="bg-[#020617] rounded-[3.5rem] border-4 border-[#1e293b] p-8 space-y-10 relative overflow-hidden shadow-2xl flex flex-col items-center">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.15),transparent)]"></div>
           
-          <div className="relative z-10 text-center space-y-4">
-            <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto">
+          <div className="relative z-10 text-center space-y-4 w-full">
+            <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto border-4 border-white/10">
               <i className="fa-solid fa-crown text-white"></i>
             </div>
             <h2 className="text-5xl font-black italic text-white uppercase tracking-tighter">ПЛЕМЯ</h2>
-            <div className="flex items-center justify-center gap-3">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic">ЗАЛ ОЖИДАНИЯ АКТИВЕН</span>
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic">СИНХРОНИЗАЦИЯ...</span>
+              </div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest italic">ID: {gameState.lobbyId}</p>
             </div>
           </div>
 
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {gameState.players.map(p => (
-              <div key={p.id} className="p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] flex flex-col items-center gap-4 animate-scale-up shadow-xl transition-all">
+              <div key={p.id} className={`p-6 bg-white/5 backdrop-blur-xl border rounded-[2.5rem] flex flex-col items-center gap-4 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500/50 shadow-indigo-500/10' : 'border-white/10'}`}>
                 <div className={`w-20 h-20 rounded-[1.8rem] overflow-hidden border-2 ${p.isHost ? 'border-indigo-400 shadow-[0_0_20px_rgba(129,140,248,0.5)]' : 'border-slate-700'}`}>
                   <img src={p.avatar} className="w-full h-full object-cover" />
                 </div>
-                <div className="text-center">
-                  <span className="font-black italic uppercase text-xs text-white block truncate w-24">{p.name}</span>
-                  <span className={`text-[8px] font-black uppercase tracking-widest mt-1 block ${p.isHost ? 'text-indigo-400' : 'text-slate-500'}`}>{p.isHost ? 'ВОЖДЬ' : 'СОЮЗНИК'}</span>
+                <div className="text-center w-full">
+                  <span className="font-black italic uppercase text-xs text-white block truncate px-2">{p.name}</span>
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    {p.isHost && <i className="fa-solid fa-star text-[8px] text-indigo-400"></i>}
+                    <span className={`text-[8px] font-black uppercase tracking-widest block ${p.isHost ? 'text-indigo-400' : 'text-slate-500'}`}>{p.isHost ? 'ВОЖДЬ' : 'СОЮЗНИК'}</span>
+                  </div>
                 </div>
               </div>
             ))}
             {Array.from({ length: Math.max(0, 4 - gameState.players.length) }).map((_, i) => (
-              <button key={i} onClick={joinFakePlayer} className="p-6 bg-white/5 border border-dashed border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 opacity-40 hover:opacity-100 transition-all">
-                <i className="fa-solid fa-user-plus text-slate-400 text-xl"></i>
+              <button key={i} onClick={joinFakePlayer} className="p-6 bg-white/5 border border-dashed border-white/10 rounded-[2.5rem] flex flex-col items-center justify-center gap-2 opacity-20 hover:opacity-50 transition-all group">
+                <i className="fa-solid fa-user-plus text-slate-400 text-xl group-hover:scale-110 transition-transform"></i>
               </button>
             ))}
           </div>
@@ -100,16 +109,22 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
               onClick={generateInviteLink}
               className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] shadow-[0_15px_40px_rgba(79,70,229,0.3)] active:scale-95 transition-all flex items-center justify-center gap-4"
             >
-              <i className="fa-solid fa-paper-plane"></i> ПРИГЛАСИТЬ СВОИХ
+              <i className="fa-solid fa-share-nodes"></i> ПРИГЛАСИТЬ СВОИХ
             </button>
             
-            <button 
-              disabled={gameState.players.length < 2}
-              onClick={startGame}
-              className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-20 disabled:grayscale"
-            >
-              В ПУТЬ
-            </button>
+            {isMeHost ? (
+               <button 
+                disabled={gameState.players.length < 2}
+                onClick={startGame}
+                className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-10 disabled:grayscale"
+              >
+                НАЧАТЬ ИГРУ
+              </button>
+            ) : (
+               <div className="w-full py-6 bg-white/5 border border-white/10 rounded-[2rem] text-slate-400 font-black text-[10px] uppercase tracking-[0.3em] text-center italic">
+                 Ожидание Вождя...
+               </div>
+            )}
           </div>
         </div>
       </div>

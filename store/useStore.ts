@@ -14,7 +14,7 @@ export function useStore() {
   const [gameState, setGameState] = useState<GameState>({
     players: [],
     currentPlayerIndex: 0,
-    history: ["Протокол Племени активирован"],
+    history: ["Ожидание синхронизации..."],
     turnNumber: 1,
     ownedAssets: {},
     reactions: [],
@@ -23,45 +23,90 @@ export function useStore() {
     lastRoll: null
   });
 
-  // Инициализация лобби и обработка start_param
+  // Инициализация данных пользователя из Telegram
   useEffect(() => {
-    const initGame = () => {
-      const tg = window.Telegram?.WebApp;
-      const startParam = tg?.initDataUnsafe?.start_param;
+    if (window.Telegram?.WebApp) {
+      const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+      if (tgUser) {
+        const realUser: User = {
+          ...INITIAL_USER,
+          id: tgUser.id.toString(),
+          name: tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : ''),
+          photo_url: tgUser.photo_url || INITIAL_USER.photo_url
+        };
+        setUser(realUser);
+      }
+    }
+  }, []);
+
+  // Логика лобби и входа по ссылке
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    const startParam = tg?.initDataUnsafe?.start_param;
+
+    // Создаем профиль текущего (реального) игрока
+    const me: GamePlayer = { 
+      id: user.id, 
+      name: user.name, 
+      avatar: user.photo_url || '', 
+      position: 0, 
+      cash: 50000, 
+      isBankrupt: false, 
+      deposits: [], 
+      ownedAssets: [], 
+      isHost: !startParam 
+    };
+
+    if (startParam) {
+      // Пользователь зашел по ссылке - он гость
+      console.log("Joined lobby:", startParam);
+      setView(AppView.SOCIAL);
       
-      const me: GamePlayer = { 
-        id: user.id, name: user.name, avatar: user.photo_url || '', 
-        position: 0, cash: 50000, isBankrupt: false, deposits: [], 
-        ownedAssets: [], isHost: !startParam 
+      // Симулируем наличие Хоста (пригласившего), так как нет бэкенда для реального коннекта
+      const host: GamePlayer = {
+        id: 'host-id',
+        name: 'Вождь Племени',
+        avatar: 'https://i.pravatar.cc/150?u=host',
+        position: 0,
+        cash: 50000,
+        isBankrupt: false,
+        deposits: [],
+        ownedAssets: [],
+        isHost: true
       };
 
-      setGameState(prev => {
-        if (prev.players.length > 0) return prev;
-        return {
+      setGameState(prev => ({
+        ...prev,
+        lobbyId: startParam,
+        players: [host, me], // Хост + Реальный юзер
+        history: [`⚡ Вы вступили в лобби ${startParam}`, ...prev.history],
+        status: 'lobby'
+      }));
+    } else {
+      // Пользователь сам создал лобби
+      if (gameState.players.length === 0) {
+        setGameState(prev => ({
           ...prev,
           players: [me],
-          lobbyId: startParam || Math.random().toString(36).substring(7),
+          lobbyId: prev.lobbyId || Math.random().toString(36).substring(7),
           status: 'lobby'
-        };
-      });
-
-      if (startParam) {
-        setView(AppView.SOCIAL);
+        }));
       }
-    };
-    
-    setTimeout(initGame, 100);
+    }
   }, [user]);
 
   const generateInviteLink = () => {
+    // Явно указываем ваш бот
     const botUsername = "tribe_goals_bot";
     const link = `https://t.me/${botUsername}/app?startapp=${gameState.lobbyId}`;
     
     if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Вступай в моё Племя! Давай достигать целей вместе в Арене 🚀")}`);
+      const text = "Вступай в моё Племя на Арене! Давай строить капитал вместе 🚀";
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+      window.Telegram.WebApp.openTelegramLink(shareUrl);
     } else {
       navigator.clipboard.writeText(link);
-      alert("Ссылка скопирована!");
+      alert("Ссылка для приглашения скопирована!");
     }
   };
 
@@ -88,12 +133,12 @@ export function useStore() {
         const newPos = (currentPlayer.position + roll) % board.length;
         const cell = board[newPos];
         let cashChange = 0;
-        let historyMsg = `${currentPlayer.name} выкинул ${roll}.`;
+        let historyMsg = `${currentPlayer.name} передвинулся на ${roll}.`;
 
         const rentOwnerId = prev.ownedAssets[newPos];
         if (cell.type === 'asset' && rentOwnerId && rentOwnerId !== currentPlayer.id) {
           cashChange = -(cell.rent || 0);
-          historyMsg += ` Аренда сектора: -${cell.rent} XP.`;
+          historyMsg += ` Аренда: -${cell.rent} XP.`;
         }
 
         const updatedPlayers = prev.players.map((p, idx) => {
