@@ -55,11 +55,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
   const [showDiceEffect, setShowDiceEffect] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [isStarting, setIsStarting] = useState(false);
   
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === currentUserId;
-  // Более надежная проверка хоста по ID
-  const isMeHost = gameState.players.find(p => p.id === currentUserId)?.isHost;
+  // Поиск себя в списке игроков и проверка флага Хоста
+  const me = gameState.players.find(p => p.id === currentUserId);
+  const isMeHost = me?.isHost;
 
   useEffect(() => {
     if (gameState.lastRoll) {
@@ -71,6 +73,18 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const narratorMessage = useMemo(() => {
     return gameState.history[0] || "Племя готово к вызову...";
   }, [gameState.history]);
+
+  const handleStartGame = async () => {
+    if (isStarting) return;
+    setIsStarting(true);
+    try {
+      await startGame();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsStarting(false);
+    }
+  };
 
   if (gameState.status === 'lobby') {
     return (
@@ -109,11 +123,12 @@ export const SocialView: React.FC<SocialViewProps> = ({
             
             {isMeHost ? (
                <button 
-                disabled={gameState.players.length < 2}
-                onClick={startGame}
+                disabled={gameState.players.length < 2 || isStarting}
+                onClick={handleStartGame}
                 className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center gap-3"
               >
-                <i className="fa-solid fa-play"></i> В БОЙ!
+                {isStarting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-play"></i>}
+                {isStarting ? 'ЗАГРУЗКА...' : 'В БОЙ!'}
               </button>
             ) : (
                <div className="w-full py-6 bg-white/5 border border-white/10 rounded-[2rem] text-slate-400 font-black text-[10px] uppercase tracking-widest text-center italic animate-pulse">

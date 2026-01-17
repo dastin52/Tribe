@@ -68,9 +68,10 @@ export function useStore() {
       }));
     }
 
-    const startParam = tg.initDataUnsafe?.start_param;
+    const startParam = tg.initDataUnsafe?.start_param || tg.initDataUnsafe?.start_query;
     if (startParam) {
-      setGameState(prev => ({ ...prev, lobbyId: startParam.toUpperCase() }));
+      const cleanParam = startParam.toUpperCase();
+      setGameState(prev => ({ ...prev, lobbyId: cleanParam }));
       setView(AppView.SOCIAL);
     } else {
       setGameState(prev => {
@@ -84,7 +85,8 @@ export function useStore() {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
     const register = async () => {
       try {
-        const isHost = !(window as any).Telegram?.WebApp?.initDataUnsafe?.start_param;
+        const tg = (window as any).Telegram?.WebApp;
+        const isHost = !(tg?.initDataUnsafe?.start_param || tg?.initDataUnsafe?.start_query);
         const me: GamePlayer = {
           id: user.id,
           name: user.name,
@@ -119,7 +121,6 @@ export function useStore() {
         if (!res.ok) return;
         const data = await res.json();
         setGameState(prev => {
-          // Если статус изменился на playing, а мы все еще в lobby - обновляемся
           return { ...prev, ...data };
         });
       } catch (e) {}
@@ -188,7 +189,6 @@ export function useStore() {
 
   const startGame = async () => {
     if (!gameState.lobbyId) return;
-    // Явно отправляем команду старта на сервер
     await syncWithServer({ 
       status: 'playing', 
       turnNumber: 1, 
@@ -197,22 +197,26 @@ export function useStore() {
     });
   };
 
-  // Fixed: Added generateInviteLink implementation to resolve shorthand property error
   const generateInviteLink = useCallback(() => {
     const tg = (window as any).Telegram?.WebApp;
-    if (!tg || !gameState.lobbyId) return;
+    const lobbyId = gameState.lobbyId;
+    if (!lobbyId) return;
     
-    // In Telegram context, usually sharing a link with startapp parameter
-    const inviteLink = `https://t.me/share/url?url=https://t.me/TribeSocialOS_bot?start=${gameState.lobbyId}&text=${encodeURIComponent('Присоединяйся к моей игре в Tribe Arena!')}`;
+    // Пытаемся определить имя бота из контекста или используем стандарт
+    const botName = "TribeSocialOS_bot"; 
+    const inviteUrl = `https://t.me/${botName}?start=${lobbyId}`;
+    const shareText = `Присоединяйся к моей игре в Tribe Arena! 🚀\nКод лобби: ${lobbyId}`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
     
-    if (tg.openTelegramLink) {
-      tg.openTelegramLink(inviteLink);
+    if (tg && tg.openTelegramLink) {
+      tg.openTelegramLink(shareUrl);
     } else {
-      navigator.clipboard.writeText(gameState.lobbyId);
-      if (tg.showAlert) {
-        tg.showAlert(`Код лобби ${gameState.lobbyId} скопирован в буфер обмена!`);
+      // Резервный вариант: копирование в буфер
+      navigator.clipboard.writeText(lobbyId);
+      if (tg && tg.showAlert) {
+        tg.showAlert(`Код лобби ${lobbyId} скопирован! Отправьте его друзьям.`);
       } else {
-        alert(`Код лобби ${gameState.lobbyId} скопирован в буфер обмена!`);
+        alert(`Код лобби ${lobbyId} скопирован!`);
       }
     }
   }, [gameState.lobbyId]);
