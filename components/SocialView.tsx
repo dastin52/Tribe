@@ -49,19 +49,45 @@ interface SocialViewProps {
   currentUserId: string;
 }
 
-const PlayerCard: React.FC<{ p: GamePlayer }> = ({ p }) => {
+const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w-20 h-20" }) => {
   const [imgError, setImgError] = useState(false);
-  const avatarUrl = useMemo(() => {
-    if (imgError || !p.avatar) return `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=6366f1&color=fff&size=128`;
-    return p.avatar;
-  }, [p.avatar, p.name, imgError]);
+  
+  const initials = useMemo(() => p.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(), [p.name]);
+  const avatarUrl = p.avatar;
+
+  if (p.isBot) {
+    return (
+      <div className={`${size} rounded-[1.8rem] bg-indigo-600 flex items-center justify-center text-white border-2 border-indigo-400 shadow-lg relative overflow-hidden`}>
+         <i className="fa-solid fa-robot text-2xl"></i>
+         <div className="absolute inset-0 bg-indigo-500/20 animate-pulse"></div>
+      </div>
+    );
+  }
+
+  if (imgError || !avatarUrl) {
+    return (
+      <div className={`${size} rounded-[1.8rem] bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-xl border-2 border-slate-600 shadow-xl`}>
+         {initials}
+      </div>
+    );
+  }
 
   return (
+    <div className={`${size} rounded-[1.8rem] overflow-hidden border-2 border-slate-700 shadow-xl`}>
+       <img 
+         src={avatarUrl} 
+         className="w-full h-full object-cover" 
+         onError={() => setImgError(true)} 
+         alt={p.name}
+       />
+    </div>
+  );
+};
+
+const PlayerCard: React.FC<{ p: GamePlayer }> = ({ p }) => {
+  return (
     <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isReady ? 'border-emerald-500 shadow-emerald-500/20' : 'border-white/10'}`}>
-      <div className={`w-20 h-20 rounded-[1.8rem] overflow-hidden border-2 relative ${p.isReady ? 'border-emerald-400' : 'border-slate-700'}`}>
-        <img src={avatarUrl} className="w-full h-full object-cover" onError={() => setImgError(true)} />
-        {p.isBot && <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-white italic tracking-tighter uppercase backdrop-blur-[1px]">AI</div>}
-      </div>
+      <PlayerAvatar p={p} />
       <div className="text-center">
         <span className="font-black italic uppercase text-[12px] text-white block truncate w-24">{p.name}</span>
         <div className="flex items-center justify-center gap-1 mt-1">
@@ -78,7 +104,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
 }) => {
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
   const [showDiceEffect, setShowDiceEffect] = useState(false);
-  const [manualCode, setManualCode] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   
   const players = gameState?.players || [];
@@ -107,7 +132,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Синхронизация с племенем...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Связь с духами капитала...</p>
       </div>
     );
   }
@@ -120,7 +145,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div className="relative z-10 text-center space-y-4 w-full">
             <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto border-4 border-white/10 animate-pulse"><i className="fa-solid fa-users-rays text-white"></i></div>
             <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none">ЗАЛ<br/>ОЖИДАНИЯ</h2>
-            <div className="bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/30 flex items-center gap-2 mx-auto w-fit"><span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId || '---'}</span></div>
+            <div className="bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/30 flex items-center gap-2 mx-auto w-fit shadow-lg shadow-indigo-500/10">
+               <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
+            </div>
           </div>
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {players.map(p => <PlayerCard key={p.id} p={p} />)}
@@ -132,14 +159,14 @@ export const SocialView: React.FC<SocialViewProps> = ({
             )}
           </div>
           <div className="w-full space-y-4 pt-4 relative z-10">
-            <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
+            <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 shadow-indigo-500/20"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
             <button onClick={() => { setIsSyncing(true); startGame(); setTimeout(() => setIsSyncing(false), 1000); }} disabled={isSyncing} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${me?.isReady ? 'bg-emerald-500 text-white shadow-emerald-500/40' : 'bg-white text-slate-900 shadow-white/10'}`}>
               {isSyncing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : me?.isReady ? <i className="fa-solid fa-clock-rotate-left"></i> : <i className="fa-solid fa-check-double"></i>}
               {isSyncing ? 'СИНХРОНИЗАЦИЯ...' : me?.isReady ? 'ЖДЕМ ОСТАЛЬНЫХ' : 'Я ГОТОВ'}
             </button>
           </div>
           <div className="relative z-10 text-[9px] font-bold text-slate-500 uppercase tracking-widest italic text-center px-4">
-             Для начала нужно минимум 2 игрока и статус «Готов».
+             Нужно минимум 2 игрока. Нажми «Я Готов», когда всё настроишь.
           </div>
         </div>
       </div>
@@ -169,10 +196,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
         {players.map((p, idx) => (
           <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[150px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-2xl scale-105' : 'bg-white/40 border-slate-100 text-slate-400'}`}>
             <div className="flex items-center gap-4">
-              <div className="relative">
-                <img src={p.avatar} className={`w-12 h-12 rounded-2xl object-cover border-2 ${gameState.currentPlayerIndex === idx ? 'border-indigo-400 shadow-md' : 'border-slate-200 grayscale opacity-60'}`} onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
-                {gameState.currentPlayerIndex === idx && <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-ping"></div>}
-              </div>
+              <PlayerAvatar p={p} size="w-12 h-12" />
               <div className="text-left"><span className="text-[11px] font-black uppercase italic block truncate w-16">{p.name}</span><span className={`text-[9px] font-black ${gameState.currentPlayerIndex === idx ? 'text-indigo-600' : 'text-slate-400'}`}>{Math.round(p.cash || 0).toLocaleString()} XP</span></div>
             </div>
           </div>
@@ -190,7 +214,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
             return (
               <button key={cell.id} onClick={() => setSelectedCell(cell)} className={`aspect-square rounded-[1.8rem] flex flex-col items-center justify-center relative transition-all duration-300 border-2 ${isTurnOwnerAt ? 'bg-white border-white scale-110 z-20 shadow-[0_0_40px_rgba(255,255,255,0.6)] text-slate-900' : ownerId ? DISTRICT_COLORS[cell.district || 'tech'] : districtStyle}`}>
                 <i className={`fa-solid ${cell.icon} text-2xl ${isTurnOwnerAt ? 'text-slate-900' : 'text-inherit'}`}></i>
-                {occupiers.length > 0 && <div className="absolute -top-1 -right-1 flex -space-x-2">{occupiers.map(p => (<div key={p.id} className="w-4 h-4 rounded-full border-2 border-[#020617] shadow-lg overflow-hidden relative"><img src={p.avatar} className="w-full h-full object-cover" /></div>))}</div>}
+                {occupiers.length > 0 && <div className="absolute -top-1 -right-1 flex -space-x-2">{occupiers.map(p => (<div key={p.id} className="w-4 h-4 rounded-full border-2 border-[#020617] shadow-lg overflow-hidden relative"><PlayerAvatar p={p} size="w-full h-full" /></div>))}</div>}
                 {ownerId && <div className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-current shadow-[0_0_10px_currentColor] animate-pulse"></div>}
               </button>
             );
