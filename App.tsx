@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from './store/useStore';
 import { AppView, YearGoal, ProgressLog } from './types';
 import { Layout } from './components/Layout';
@@ -11,6 +11,15 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { SocialView } from './components/SocialView';
 import { SettingsView } from './components/SettingsView';
 
+// Fix: Define the Telegram property on the Window interface to satisfy TypeScript's strict type checking.
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp: any;
+    };
+  }
+}
+
 const App: React.FC = () => {
   const store = useStore();
   const [showWizard, setShowWizard] = useState(false);
@@ -18,6 +27,33 @@ const App: React.FC = () => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [generatingVision, setGeneratingVision] = useState(false);
   
+  // Telegram WebApp Initialization
+  useEffect(() => {
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+      window.Telegram.WebApp.enableClosingConfirmation();
+      
+      // Настройка цветов темы
+      const tg = window.Telegram.WebApp;
+      document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor);
+      document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor);
+    }
+
+    // Глобальный фикс для клавиатуры: скролл к инпуту при фокусе
+    const handleFocus = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        setTimeout(() => {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    };
+
+    window.addEventListener('focusin', handleFocus);
+    return () => window.removeEventListener('focusin', handleFocus);
+  }, []);
+
   const financials = store.user.financials || { total_assets: 0, total_debts: 0, monthly_income: 0, monthly_expenses: 0, currency: '₽' };
   const netWorth = financials.total_assets - financials.total_debts;
 
@@ -61,20 +97,20 @@ const App: React.FC = () => {
 
   if (store.view === AppView.LANDING) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10 text-center animate-fade-in relative overflow-hidden">
+      <div className="h-full bg-white flex flex-col items-center justify-center p-10 text-center animate-fade-in relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-indigo-50 to-white opacity-40"></div>
         <div className="relative z-10 space-y-12 w-full max-w-sm">
           <div className="space-y-6">
-            <div className="w-28 h-28 bg-slate-900 rounded-[2.5rem] flex items-center justify-center text-white text-5xl mx-auto shadow-2xl rotate-3">
+            <div className="w-24 h-24 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white text-4xl mx-auto shadow-2xl rotate-3">
               <i className="fa-solid fa-mountain-sun"></i>
             </div>
-            <h1 className="text-6xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Tribe</h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-loose">
+            <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Tribe</h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
               Твоя операционная система <br/> достижений и капитала
             </p>
           </div>
           <div className="flex flex-col gap-3">
-            <button onClick={() => store.setView(AppView.DASHBOARD)} className="w-full py-6 bg-slate-900 text-white font-black rounded-[2rem] shadow-xl uppercase tracking-widest text-xs active:scale-95 transition-all">Войти в Tribe</button>
+            <button onClick={() => store.setView(AppView.DASHBOARD)} className="w-full py-5 bg-slate-900 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">Войти в Tribe</button>
           </div>
         </div>
       </div>
@@ -120,24 +156,24 @@ const App: React.FC = () => {
       {showWizard && <GoalWizard values={store.values} onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}
       
       {selectedGoal && (
-        <div className="fixed inset-0 bg-white z-[100] flex flex-col animate-fade-in overflow-y-auto custom-scrollbar">
-           <header className="p-6 flex justify-between items-center border-b border-slate-50 sticky top-0 bg-white/80 backdrop-blur-md z-10">
+        <div className="fixed inset-0 bg-white z-[100] flex flex-col animate-fade-in overflow-hidden">
+           <header className="p-4 flex justify-between items-center border-b border-slate-50 sticky top-0 bg-white/80 backdrop-blur-md z-10">
               <button onClick={() => setSelectedGoal(null)} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400"><i className="fa-solid fa-chevron-left"></i></button>
               <h3 className="font-black text-[10px] uppercase tracking-widest italic">Детали Цели</h3>
               <div className="w-10"></div>
            </header>
            
-           <div className="p-8 space-y-8 pb-20">
+           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-10">
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                    <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest italic">{selectedGoal.category}</span>
                    {selectedGoal.is_shared && <span className="text-[8px] font-black bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-widest">Команда</span>}
                 </div>
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic leading-none uppercase">{selectedGoal.title}</h2>
+                <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic leading-none uppercase">{selectedGoal.title}</h2>
               </div>
 
               <div className="relative group">
-                <div className="aspect-video w-full bg-slate-100 rounded-[2.5rem] overflow-hidden shadow-inner border border-slate-100">
+                <div className="aspect-video w-full bg-slate-100 rounded-[2rem] overflow-hidden shadow-inner border border-slate-100">
                   {selectedGoal.image_url ? (
                     <img src={selectedGoal.image_url} className="w-full h-full object-cover" />
                   ) : (
@@ -148,7 +184,7 @@ const App: React.FC = () => {
                   )}
                 </div>
                 {!selectedGoal.image_url && (
-                  <button onClick={handleGenerateVision} disabled={generatingVision} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-[2.5rem]">
+                  <button onClick={handleGenerateVision} disabled={generatingVision} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-[2rem]">
                     <div className="px-6 py-3 bg-white text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
                       {generatingVision ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-wand-magic-sparkles text-indigo-500"></i>}
                       Сгенерировать видение
@@ -157,13 +193,13 @@ const App: React.FC = () => {
                 )}
               </div>
 
-              <div className="p-8 bg-slate-900 rounded-[3.5rem] text-white flex justify-between items-center shadow-xl">
+              <div className="p-6 bg-slate-900 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl">
                 <div>
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Общий прогресс</span>
-                  <div className="text-5xl font-black italic">{Math.round((selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100)}%</div>
+                  <div className="text-4xl font-black italic">{Math.round((selectedGoal.current_value / (selectedGoal.target_value || 1)) * 100)}%</div>
                 </div>
-                <div className="w-20 h-20 rounded-full border-4 border-indigo-500 flex items-center justify-center">
-                   <i className="fa-solid fa-bolt text-indigo-400 text-2xl"></i>
+                <div className="w-16 h-16 rounded-full border-4 border-indigo-500 flex items-center justify-center">
+                   <i className="fa-solid fa-bolt text-indigo-400 text-xl"></i>
                 </div>
               </div>
 
@@ -171,9 +207,9 @@ const App: React.FC = () => {
                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 italic">Мировые задачи (Milestones)</h4>
                  <div className="space-y-3">
                     {store.subgoals.filter(sg => sg.year_goal_id === selectedGoal.id).map(sg => (
-                      <div key={sg.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                      <div key={sg.id} className="p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm">
                          <div className="flex justify-between items-center mb-4">
-                            <h5 className="font-black text-slate-800 text-sm uppercase italic">{sg.title}</h5>
+                            <h5 className="font-black text-slate-800 text-xs uppercase italic">{sg.title}</h5>
                             <span className="text-[10px] font-black text-indigo-500">{Math.round((sg.current_value / sg.target_value) * 100)}%</span>
                          </div>
                          <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden">
@@ -188,18 +224,17 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-              {/* Feed of Social Proof (Tribe Feed) */}
               <div className="space-y-4">
                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 italic">Фид Племени (Social Proof)</h4>
                  <div className="space-y-4">
                     {goalLogs.length === 0 ? (
-                       <div className="p-10 text-center bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
+                       <div className="p-10 text-center bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-100">
                           <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Активности пока нет</p>
                        </div>
                     ) : goalLogs.map(log => {
                       const verifier = store.partners.find(p => p.id === log.verified_by);
                       return (
-                        <div key={log.id} className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm space-y-3">
+                        <div key={log.id} className="p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm space-y-3">
                            <div className="flex justify-between items-start">
                               <div className="flex items-center gap-2">
                                  {log.is_verified ? (
