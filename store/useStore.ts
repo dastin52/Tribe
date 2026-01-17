@@ -68,14 +68,12 @@ export function useStore() {
       }));
     }
 
-    // Ищем код лобби в параметрах запуска
     const startParam = tg.initDataUnsafe?.start_param || tg.initDataUnsafe?.start_query;
     if (startParam) {
       const cleanParam = startParam.toUpperCase();
       setGameState(prev => ({ ...prev, lobbyId: cleanParam }));
       setView(AppView.SOCIAL);
     } else {
-      // Если мы открыли приложение сами, генерируем новое лобби
       setGameState(prev => {
         if (!prev.lobbyId) return { ...prev, lobbyId: Math.random().toString(36).substring(2, 7).toUpperCase() };
         return prev;
@@ -87,6 +85,10 @@ export function useStore() {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
     const register = async () => {
       try {
+        const tg = (window as any).Telegram?.WebApp;
+        // Если зашли без параметров - мы потенциальный хост
+        const isPotentialHost = !(tg?.initDataUnsafe?.start_param);
+        
         const me: GamePlayer = {
           id: user.id,
           name: user.name,
@@ -96,7 +98,7 @@ export function useStore() {
           isBankrupt: false,
           deposits: [],
           ownedAssets: [],
-          isHost: false // Сервер сам решит, кто хост
+          isHost: isPotentialHost 
         };
         const res = await fetch(`${API_BASE}/join`, {
           method: 'POST',
@@ -120,34 +122,27 @@ export function useStore() {
         const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
         if (!res.ok) return;
         const data = await res.json();
-        setGameState(prev => {
-          return { ...prev, ...data };
-        });
+        setGameState(prev => ({ ...prev, ...data }));
       } catch (e) {}
-    }, 2000);
+    }, 1500); // Чуть быстрее интервал
     return () => clearInterval(interval);
   }, [gameState.lobbyId]);
 
   const rollDice = async (board: BoardCell[]) => {
     if (gameState.lastRoll) return;
     const roll = Math.floor(Math.random() * 6) + 1;
-    
     setGameState(prev => ({ ...prev, lastRoll: roll }));
-
     setTimeout(async () => {
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
       const newPos = (currentPlayer.position + roll) % board.length;
       const cell = board[newPos];
-      
       let newPlayers = [...gameState.players];
       let newHistory = [`${currentPlayer.name} выбросил ${roll} и зашел на ${cell.title}`, ...gameState.history];
-      
       if (cell.type === 'event' || cell.type === 'tax') {
         const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
         newPlayers = newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? { ...p, cash: Math.max(0, p.cash + event.amount) } : p);
         newHistory.unshift(`⚡️ СОБЫТИЕ: ${event.title}! ${event.text}`);
       }
-
       const update = {
         players: newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? { ...p, position: newPos } : p),
         lastRoll: null,
@@ -155,7 +150,6 @@ export function useStore() {
         turnNumber: gameState.turnNumber + 1,
         history: newHistory.slice(0, 20)
       };
-
       await syncWithServer(update);
     }, 2000);
   };
@@ -164,15 +158,10 @@ export function useStore() {
     const playerIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
     const player = gameState.players[playerIdx];
     const cell = board[cellId];
-
     if (player && player.cash >= (cell.cost || 0) && !gameState.ownedAssets[cellId]) {
       const update = {
         ownedAssets: { ...gameState.ownedAssets, [cellId]: player.id },
-        players: gameState.players.map((p, idx) => idx === playerIdx ? { 
-          ...p, 
-          cash: p.cash - (cell.cost || 0), 
-          ownedAssets: [...p.ownedAssets, cellId] 
-        } : p),
+        players: gameState.players.map((p, idx) => idx === playerIdx ? { ...p, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, cellId] } : p),
         history: [`💎 ${player.name} инвестировал в ${cell.title}!`, ...gameState.history].slice(0, 20)
       };
       await syncWithServer(update);
@@ -202,8 +191,9 @@ export function useStore() {
     const lobbyId = gameState.lobbyId;
     if (!lobbyId) return;
     
-    const botName = "tribe_goals_bot"; 
-    const inviteUrl = `https://t.me/${botName}?start=${lobbyId}`;
+    // Бот называется tribe_goals_bot
+    const botUser = "tribe_goals_bot"; 
+    const inviteUrl = `https://t.me/${botUser}?start=${lobbyId}`;
     const shareText = `Присоединяйся к моей игре в Tribe Arena! 🚀\nКод лобби: ${lobbyId}`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
     
@@ -211,11 +201,7 @@ export function useStore() {
       tg.openTelegramLink(shareUrl);
     } else {
       navigator.clipboard.writeText(inviteUrl);
-      if (tg && tg.showAlert) {
-        tg.showAlert(`Ссылка на игру скопирована! Отправьте её друзьям.`);
-      } else {
-        alert(`Ссылка на игру скопирована!`);
-      }
+      alert(`Ссылка скопирована в буфер обмена!`);
     }
   }, [gameState.lobbyId]);
 
