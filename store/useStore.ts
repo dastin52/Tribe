@@ -7,10 +7,18 @@ const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
 const BOARD_CELLS_COUNT = 24;
 
 export function useStore() {
-  const [user, setUser] = useState<User>(() => ({
-    ...INITIAL_USER,
-    id: 'id' + Math.random().toString(36).substring(2, 9)
-  }));
+  // Гарантируем уникальный ID игрока, который не меняется при перезагрузке
+  const [user, setUser] = useState<User>(() => {
+    const savedId = typeof window !== 'undefined' ? localStorage.getItem('tribe_user_id') : null;
+    const userId = savedId || 'u' + Math.random().toString(36).substring(2, 9);
+    if (typeof window !== 'undefined' && !savedId) localStorage.setItem('tribe_user_id', userId);
+    
+    return {
+      ...INITIAL_USER,
+      id: userId,
+      photo_url: "" // Очищаем моковые фото
+    };
+  });
   
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [goals, setGoals] = useState<YearGoal[]>(SAMPLE_GOALS);
@@ -19,10 +27,9 @@ export function useStore() {
   const [transactions, setTransactions] = useState<Transaction[]>(SAMPLE_TRANSACTIONS);
   
   const [gameState, setGameState] = useState<GameState>(() => {
-    // Пытаемся восстановить ID лобби из памяти, чтобы избежать '---'
-    const savedId = typeof window !== 'undefined' ? localStorage.getItem('tribe_active_lobby') : null;
-    const initialId = savedId || Math.random().toString(36).substring(2, 7).toUpperCase();
-    if (typeof window !== 'undefined' && !savedId) localStorage.setItem('tribe_active_lobby', initialId);
+    const savedLobby = typeof window !== 'undefined' ? localStorage.getItem('tribe_active_lobby') : null;
+    const lobbyId = savedLobby || Math.random().toString(36).substring(2, 7).toUpperCase();
+    if (typeof window !== 'undefined' && !savedLobby) localStorage.setItem('tribe_active_lobby', lobbyId);
     
     return {
       players: [],
@@ -31,7 +38,7 @@ export function useStore() {
       turnNumber: 1,
       ownedAssets: {},
       reactions: [],
-      lobbyId: initialId,
+      lobbyId: lobbyId,
       status: 'lobby',
       lastRoll: null
     };
@@ -51,7 +58,6 @@ export function useStore() {
       });
       if (res.ok) {
         const data = await res.json();
-        // Важно: если сервер вернул пустые поля, сохраняем наш текущий ID лобби
         const cleanData = { ...data, lobbyId: data.lobbyId || gameState.lobbyId };
         const hash = JSON.stringify(cleanData);
         if (hash !== lastStateHash.current) {
@@ -62,7 +68,7 @@ export function useStore() {
     } catch (e) {
       console.error("Sync error:", e);
     } finally {
-      setTimeout(() => { isSyncingRef.current = false; }, 1000);
+      setTimeout(() => { isSyncingRef.current = false; }, 800);
     }
   };
 
@@ -72,13 +78,13 @@ export function useStore() {
       tg.ready();
       if (tg.initDataUnsafe?.user) {
         const u = tg.initDataUnsafe.user;
-        const photo = u.photo_url || "";
         setUser(prev => ({
           ...prev,
           id: String(u.id),
           name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
-          photo_url: photo
+          photo_url: u.photo_url || ""
         }));
+        localStorage.setItem('tribe_user_id', String(u.id));
       }
       const startParam = tg.initDataUnsafe?.start_param;
       if (startParam) {
@@ -133,75 +139,63 @@ export function useStore() {
   const generateInviteLink = useCallback(() => {
     const tg = (window as any).Telegram?.WebApp;
     const lid = gameState.lobbyId;
-    
-    if (!lid) {
-      alert("Ошибка: Лобби еще не создано. Пожалуйста, подождите.");
-      return;
-    }
+    if (!lid) return;
 
     const botUser = "tribe_goals_bot"; 
     const inviteUrl = `https://t.me/${botUser}?start=${lid}`;
-    const shareText = `Присоединяйся к моей игре в Tribe! 🚀\nКод лобби: ${lid}`;
+    const shareText = `Входи в моё племя! 🚀 Код: ${lid}`;
     
     if (tg && tg.openTelegramLink) {
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
       tg.HapticFeedback?.impactOccurred('medium');
       tg.openTelegramLink(shareUrl);
-    } else if (navigator.share) {
-      navigator.share({ title: 'Tribe Arena', text: shareText, url: inviteUrl }).catch(() => {
-        navigator.clipboard.writeText(inviteUrl);
-        alert("Ссылка скопирована!");
-      });
     } else {
       navigator.clipboard.writeText(inviteUrl);
-      alert("Ссылка скопирована в буфер обмена!");
+      alert("Ссылка скопирована!");
     }
   }, [gameState.lobbyId]);
 
-  const rollDice = async (board: BoardCell[]) => {
-    if (gameState.lastRoll || gameState.status !== 'playing') return;
-    const roll = Math.floor(Math.random() * 6) + 1;
-    setGameState(prev => ({ ...prev, lastRoll: roll }));
-    
-    setTimeout(async () => {
-      setGameState(prev => {
-        const currentPlayer = prev.players[prev.currentPlayerIndex];
-        if (!currentPlayer) return { ...prev, lastRoll: null };
-        const newPos = (currentPlayer.position + roll) % BOARD_CELLS_COUNT;
-        const update = {
-          players: prev.players.map((p, i) => i === prev.currentPlayerIndex ? { ...p, position: newPos } : p),
-          lastRoll: null,
-          currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
-          turnNumber: prev.turnNumber + 1,
-          history: [`🎲 ${currentPlayer.name} перешел на ${board[newPos].title}`, ...prev.history].slice(0, 15)
-        };
-        syncWithServer({ gameStateUpdate: update });
-        return { ...prev, ...update };
-      });
-    }, 2000);
-  };
-
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
-    rollDice, generateInviteLink, 
-    toggleReady: () => syncWithServer({ player: { id: user.id, isReady: true } }),
-    buyAsset: async (cellId: number, board: BoardCell[]) => {
+    rollDice: (board: BoardCell[]) => {
+      const roll = Math.floor(Math.random() * 6) + 1;
+      setGameState(p => ({...p, lastRoll: roll}));
+      setTimeout(() => {
+        setGameState(prev => {
+          const cp = prev.players[prev.currentPlayerIndex];
+          if (!cp) return {...prev, lastRoll: null};
+          const nPos = (cp.position + roll) % BOARD_CELLS_COUNT;
+          const up = {
+            players: prev.players.map((p, i) => i === prev.currentPlayerIndex ? {...p, position: nPos} : p),
+            lastRoll: null,
+            currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
+            turnNumber: prev.turnNumber + 1,
+            history: [`🎲 ${cp.name} на ${board[nPos].title}`, ...prev.history].slice(0, 10)
+          };
+          syncWithServer({ gameStateUpdate: up });
+          return {...prev, ...up};
+        });
+      }, 2000);
+    },
+    generateInviteLink,
+    buyAsset: async (cid: number, b: BoardCell[]) => {
       const pIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
-      const player = gameState.players[pIdx];
-      if (player && player.cash >= (board[cellId].cost || 0) && !gameState.ownedAssets[cellId]) {
+      const p = gameState.players[pIdx];
+      if (p && p.cash >= (b[cid].cost || 0)) {
         await syncWithServer({ gameStateUpdate: {
-          ownedAssets: { ...gameState.ownedAssets, [cellId]: player.id },
-          players: gameState.players.map((p, i) => i === pIdx ? { ...p, cash: p.cash - (board[cellId].cost || 0) } : p),
-          history: [`💎 ${player.name} купил ${board[cellId].title}`, ...gameState.history].slice(0, 15)
+          ownedAssets: { ...gameState.ownedAssets, [cid]: p.id },
+          players: gameState.players.map((pl, i) => i === pIdx ? { ...pl, cash: pl.cash - (b[cid].cost || 0) } : pl)
         }});
       }
     },
-    joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Инвестор", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }),
+    joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }),
     joinLobbyManual: (code: string) => { 
-      const clean = code.toUpperCase();
-      localStorage.setItem('tribe_active_lobby', clean);
-      setGameState(p => ({ ...p, lobbyId: clean })); 
-      setView(AppView.SOCIAL); 
+      const c = code.toUpperCase().trim();
+      if (!c) return;
+      localStorage.setItem('tribe_active_lobby', c);
+      setGameState(p => ({ ...p, lobbyId: c, players: [] })); 
+      // Принудительно запускаем синхронизацию для нового ID
+      isSyncingRef.current = false;
     },
     startGame: () => syncWithServer({ player: { id: user.id, isReady: !gameState.players.find(p=>p.id===user.id)?.isReady } }),
     updateSubgoalProgress: () => {},
@@ -210,6 +204,6 @@ export function useStore() {
     addPartner: (n: string, r: string) => { setPartners(p => [...p, { id: crypto.randomUUID(), name: n, role: r as any }]); },
     toggleGoalPrivacy: (id: string) => { setGoals(p => p.map(g => g.id === id ? { ...g, is_shared: !g.is_shared } : g)); },
     updateUserInfo: (data: Partial<User>) => { setUser(p => ({ ...p, ...data })); },
-    resetData: () => { localStorage.removeItem('tribe_active_lobby'); window.location.reload(); }
+    resetData: () => { localStorage.clear(); window.location.reload(); }
   };
 }
