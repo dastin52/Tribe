@@ -158,7 +158,7 @@ export interface BoardCell {
   title: string;
   cost?: number;
   rent?: number;
-  ownerId?: string; // id игрока (user.id или id партнера)
+  ownerId?: string; // Используется только для статических данных, динамика в GameState
   icon: string;
 }
 
@@ -188,4 +188,5 @@ export interface GameState {
   activeOffers: GameOffer[];
   turnNumber: number;
   isTutorialComplete: boolean;
+  ownedAssets: Record<number, string>; // cellId -> playerId
 }

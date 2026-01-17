@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { AccountabilityPartner, PartnerRole, YearGoal, GameState, BoardCell, GamePlayer } from '../types';
+import { AccountabilityPartner, PartnerRole, YearGoal, GameState, BoardCell, GamePlayer, CellType, AssetDistrict } from '../types';
 
 const DISTRICT_INFO: Record<string, { color: string, label: string }> = {
   tech: { color: 'border-blue-500 bg-blue-500/10', label: 'Технологии' },
@@ -11,7 +11,8 @@ const DISTRICT_INFO: Record<string, { color: string, label: string }> = {
   edu: { color: 'border-cyan-500 bg-cyan-500/10', label: 'Образование' }
 };
 
-const BOARD: BoardCell[] = [
+// Fix: Explicitly cast the board array to BoardCell[] to prevent string widening of literals like 'start', 'asset', etc.
+const BOARD: BoardCell[] = ([
   { id: 0, type: 'start', title: 'Старт', icon: 'fa-rocket' },
   { id: 1, type: 'asset', district: 'tech', title: 'App Studio', cost: 10000, rent: 1500, icon: 'fa-mobile' },
   { id: 2, type: 'event', title: 'Событие', icon: 'fa-bolt' },
@@ -19,7 +20,6 @@ const BOARD: BoardCell[] = [
   { id: 4, type: 'tax', title: 'Налог', icon: 'fa-hand-holding-dollar' },
   { id: 5, type: 'asset', district: 'realestate', title: 'Co-working', cost: 25000, rent: 4500, icon: 'fa-couch' },
   { id: 6, type: 'event', title: 'Шанс', icon: 'fa-dice' },
-  { id: 7, type: 'asset', district: 'realestate', title: 'Smart City', cost: 40000, rent: 8000, icon: 'fa-city' },
   { id: 8, type: 'asset', district: 'health', title: 'Bio-Clinic', cost: 55000, rent: 12000, icon: 'fa-dna' },
   { id: 9, type: 'event', title: 'Событие', icon: 'fa-microscope' },
   { id: 10, type: 'asset', district: 'health', title: 'Pharma', cost: 75000, rent: 18000, icon: 'fa-pills' },
@@ -36,7 +36,8 @@ const BOARD: BoardCell[] = [
   { id: 21, type: 'asset', district: 'edu', title: 'University', cost: 400000, rent: 150000, icon: 'fa-building-columns' },
   { id: 22, type: 'tax', title: 'Инфляция', icon: 'fa-arrow-down-wide-short' },
   { id: 23, type: 'event', title: 'Событие', icon: 'fa-star' },
-];
+  { id: 7, type: 'asset', district: 'realestate', title: 'Smart City', cost: 40000, rent: 8000, icon: 'fa-city' },
+] as BoardCell[]).sort((a,b) => a.id - b.id);
 
 interface SocialViewProps {
   partners: AccountabilityPartner[];
@@ -81,12 +82,13 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
 
       {activeMode === 'arena' ? (
         <div className="space-y-6 animate-fade-in px-1">
-           {/* Player Info Bar */}
            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
               {gameState.players.map((p, idx) => (
                 <div key={p.id} className={`flex-shrink-0 p-3 rounded-2xl border-2 transition-all ${gameState.currentPlayerIndex === idx ? 'bg-indigo-600 border-white text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}>
                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-slate-200 overflow-hidden"><img src={p.avatar} className="w-full h-full object-cover" /></div>
+                      <div className="w-6 h-6 rounded-lg bg-slate-200 overflow-hidden">
+                        {p.avatar ? <img src={p.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-indigo-100 flex items-center justify-center text-[8px] text-indigo-400 font-bold">{p.name[0]}</div>}
+                      </div>
                       <span className="text-[9px] font-black uppercase tracking-tighter italic">{p.name}</span>
                    </div>
                    <div className="mt-1 text-xs font-black italic">{p.cash.toLocaleString()} XP</div>
@@ -94,30 +96,35 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
               ))}
            </div>
 
-           {/* 24-Cell Board Grid */}
            <div className="bg-slate-950 p-6 rounded-[3rem] shadow-2xl relative overflow-hidden border-4 border-slate-900">
               <div className="grid grid-cols-4 gap-2 relative z-10">
                  {BOARD.map((cell, idx) => {
                    const occupyingPlayers = gameState.players.filter(p => p.position === idx);
                    const isOccupied = occupyingPlayers.length > 0;
-                   const isCurrentPlayerHere = currentPlayer.position === idx;
-                   const districtStyle = cell.district ? DISTRICT_INFO[cell.district].color : 'bg-slate-800/40 border-slate-800';
+                   const isCurrentPlayerHere = currentPlayer?.position === idx;
+                   const ownerId = gameState.ownedAssets[idx];
+                   const owner = gameState.players.find(p => p.id === ownerId);
+                   const districtStyle = cell.district ? DISTRICT_INFO[cell.district as string].color : 'bg-slate-800/40 border-slate-800';
 
                    return (
                      <button 
                       key={cell.id} 
                       onClick={() => setSelectedCell(cell)}
                       className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all border-2 ${
-                        isCurrentPlayerHere ? 'bg-white border-indigo-400 scale-105 z-20 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : districtStyle
+                        isCurrentPlayerHere ? 'bg-white border-indigo-400 scale-105 z-20 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 
+                        ownerId ? 'bg-emerald-500/20 border-emerald-500/50' : districtStyle
                       }`}
                      >
-                        <i className={`fa-solid ${cell.icon} ${isCurrentPlayerHere ? 'text-indigo-600' : 'text-slate-600'} text-lg mb-1`}></i>
+                        <i className={`fa-solid ${cell.icon} ${isCurrentPlayerHere ? 'text-indigo-600' : ownerId ? 'text-emerald-400' : 'text-slate-600'} text-lg mb-1`}></i>
                         <span className="text-[5px] font-black uppercase text-slate-400 tracking-tighter text-center leading-none">{cell.title}</span>
                         
-                        {/* Player Markers */}
+                        {ownerId && (
+                           <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-emerald-500 shadow-sm border border-white"></div>
+                        )}
+
                         <div className="absolute -top-1 -right-1 flex gap-0.5">
                            {occupyingPlayers.map(p => (
-                             <div key={p.id} className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: p.id === currentPlayer.id ? '#6366f1' : '#cbd5e1' }}></div>
+                             <div key={p.id} className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: p.id === currentPlayer?.id ? '#6366f1' : '#cbd5e1' }}></div>
                            ))}
                         </div>
                      </button>
@@ -125,12 +132,11 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
                  })}
               </div>
 
-              {/* Central Controller */}
               <div className="mt-8 bg-white/5 p-6 rounded-3xl border border-white/5 relative z-10 flex flex-col gap-4">
                  <div className="flex justify-between items-end">
                     <div>
                        <span className="text-[8px] font-black text-slate-500 uppercase block italic mb-1">Ход игрока</span>
-                       <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{currentPlayer.name}</h3>
+                       <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{currentPlayer?.name || "..."}</h3>
                     </div>
                     <button 
                       disabled={isRolling}
@@ -143,7 +149,6 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
               </div>
            </div>
 
-           {/* Selected Cell Actions */}
            {selectedCell && (
              <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl animate-scale-up space-y-4">
                 <div className="flex justify-between items-start">
@@ -151,7 +156,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
                       <div className="w-14 h-14 bg-slate-950 text-white rounded-2xl flex items-center justify-center text-xl"><i className={`fa-solid ${selectedCell.icon}`}></i></div>
                       <div>
                          <h4 className="text-lg font-black text-slate-900 italic uppercase leading-none">{selectedCell.title}</h4>
-                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 block italic">{selectedCell.district ? DISTRICT_INFO[selectedCell.district].label : 'Специальный сектор'}</span>
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 block italic">{selectedCell.district ? DISTRICT_INFO[selectedCell.district as string].label : 'Специальный сектор'}</span>
                       </div>
                    </div>
                    <button onClick={() => setSelectedCell(null)} className="text-slate-300"><i className="fa-solid fa-xmark"></i></button>
@@ -170,7 +175,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
                   </div>
                 )}
 
-                {selectedCell.type === 'asset' && !selectedCell.ownerId && currentPlayer.position === selectedCell.id && (
+                {selectedCell.type === 'asset' && !gameState.ownedAssets[selectedCell.id] && currentPlayer?.position === selectedCell.id && (
                   <button 
                     onClick={() => { buyAsset(selectedCell.id, BOARD); setSelectedCell(null); }}
                     className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95"
@@ -178,10 +183,17 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
                     Захватить Актив за {selectedCell.cost} XP
                   </button>
                 )}
+
+                {gameState.ownedAssets[selectedCell.id] && (
+                   <div className="p-4 bg-emerald-50 rounded-2xl text-center border border-emerald-100">
+                      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest italic">
+                        Владелец: {gameState.players.find(p => p.id === gameState.ownedAssets[selectedCell.id])?.name}
+                      </span>
+                   </div>
+                )}
              </div>
            )}
 
-           {/* Game Log */}
            <div className="space-y-3 px-2">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">События Арены</h3>
               {gameState.history.map((log, i) => (
@@ -197,7 +209,6 @@ export const SocialView: React.FC<SocialViewProps> = ({ partners, goals, onVerif
         </div>
       )}
 
-      {/* Rules Modal */}
       {showRules && (
         <div className="fixed inset-0 bg-slate-950/95 z-[500] p-8 overflow-y-auto animate-fade-in flex items-center justify-center">
            <div className="max-w-sm w-full bg-white rounded-[3rem] p-10 space-y-6">
