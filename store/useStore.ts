@@ -4,7 +4,7 @@ import { User, Value, YearGoal, AppView, AccountabilityPartner, Debt, Subscripti
 import { geminiService } from '../services/gemini';
 import { INITIAL_USER, INITIAL_VALUES, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_MEETINGS, SAMPLE_TRANSACTIONS } from './initialData';
 
-const STORE_VERSION = '2.1.0';
+const STORE_VERSION = '2.2.0';
 
 export function useStore() {
   const [user, setUser] = useState<User>(INITIAL_USER);
@@ -18,22 +18,22 @@ export function useStore() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [values, setValues] = useState<Value[]>(INITIAL_VALUES);
   const [loading, setLoading] = useState(true);
+  
+  // Флаг демонстрационного режима
+  const [isDemo, setIsDemo] = useState(true);
+  const [showRegPrompt, setShowRegPrompt] = useState(false);
 
-  // Загрузка по модулям для отказоустойчивости
   useEffect(() => {
     const safeLoad = (key: string, fallback: any) => {
       try {
         const saved = localStorage.getItem(key);
         if (!saved) return fallback;
         const parsed = JSON.parse(saved);
-        return (Array.isArray(parsed) && parsed.length === 0 && Array.isArray(fallback)) ? fallback : parsed;
+        // Если есть сохраненные данные, значит пользователь уже начал свой путь
+        if (key === 'tribe_user' && parsed.id !== 'demo-user') setIsDemo(false);
+        return parsed;
       } catch (e) { return fallback; }
     };
-
-    const version = localStorage.getItem('tribe_version');
-    if (version !== STORE_VERSION) {
-      console.log("System update detected. Re-initializing modules...");
-    }
 
     setUser(safeLoad('tribe_user', INITIAL_USER));
     setGoals(safeLoad('tribe_goals', SAMPLE_GOALS));
@@ -45,17 +45,36 @@ export function useStore() {
     setDebts(safeLoad('tribe_debts', []));
     setSubscriptions(safeLoad('tribe_subs', []));
 
-    localStorage.setItem('tribe_version', STORE_VERSION);
     setLoading(false);
   }, []);
 
-  // Синхронизация каждого модуля независимо
-  useEffect(() => { if (!loading) localStorage.setItem('tribe_user', JSON.stringify(user)); }, [user, loading]);
-  useEffect(() => { if (!loading) localStorage.setItem('tribe_goals', JSON.stringify(goals)); }, [goals, loading]);
-  useEffect(() => { if (!loading) localStorage.setItem('tribe_subgoals', JSON.stringify(subgoals)); }, [subgoals, loading]);
-  useEffect(() => { if (!loading) localStorage.setItem('tribe_txs', JSON.stringify(transactions)); }, [transactions, loading]);
-  useEffect(() => { if (!loading) localStorage.setItem('tribe_partners', JSON.stringify(partners)); }, [partners, loading]);
-  useEffect(() => { if (!loading) localStorage.setItem('tribe_meetings', JSON.stringify(meetings)); }, [meetings, loading]);
+  useEffect(() => { if (!loading && !isDemo) localStorage.setItem('tribe_user', JSON.stringify(user)); }, [user, loading, isDemo]);
+  useEffect(() => { if (!loading && !isDemo) localStorage.setItem('tribe_goals', JSON.stringify(goals)); }, [goals, loading, isDemo]);
+  useEffect(() => { if (!loading && !isDemo) localStorage.setItem('tribe_subgoals', JSON.stringify(subgoals)); }, [subgoals, loading, isDemo]);
+  useEffect(() => { if (!loading && !isDemo) localStorage.setItem('tribe_txs', JSON.stringify(transactions)); }, [transactions, loading, isDemo]);
+  useEffect(() => { if (!loading && !isDemo) localStorage.setItem('tribe_partners', JSON.stringify(partners)); }, [partners, loading, isDemo]);
+
+  const checkDemo = (action: () => void) => {
+    if (isDemo) {
+      setShowRegPrompt(true);
+    } else {
+      action();
+    }
+  };
+
+  const startMyOwnJourney = () => {
+    // Сброс демо-данных и старт чистой сессии
+    setUser({ ...INITIAL_USER, id: crypto.randomUUID(), xp: 0, level: 1, streak: 0, financials: { ...INITIAL_USER.financials!, total_assets: 0, total_debts: 0 } });
+    setGoals([]);
+    setSubgoals([]);
+    setPartners([]);
+    setTransactions([]);
+    setDebts([]);
+    setSubscriptions([]);
+    setMeetings([]);
+    setIsDemo(false);
+    setShowRegPrompt(false);
+  };
 
   const generateGoalVision = useCallback(async (goalId: string) => {
     const goal = goals.find(g => g.id === goalId);
@@ -69,22 +88,18 @@ export function useStore() {
   }, [goals]);
 
   return {
-    user, view, setView, goals, subgoals, transactions, debts, subscriptions, partners, loading, meetings, values,
+    user, view, setView, goals, subgoals, transactions, debts, subscriptions, partners, loading, meetings, values, isDemo, showRegPrompt, setShowRegPrompt, startMyOwnJourney,
     
-    // Feature: Goal Management
-    addGoalWithPlan: async (g: YearGoal, s: SubGoal[]) => {
+    addGoalWithPlan: (g: YearGoal, s: SubGoal[]) => checkDemo(() => {
       setGoals(p => [...p, g]);
       setSubgoals(p => [...p, ...s]);
       setTimeout(() => generateGoalVision(g.id), 1000);
-    },
+    }),
     
-    // Feature: Progress & Social Verification
-    updateSubgoalProgress: (sgId: string, value: number, forceVerify: boolean = false) => {
+    updateSubgoalProgress: (sgId: string, value: number, forceVerify: boolean = false) => checkDemo(() => {
       setSubgoals(prev => prev.map(sg => {
         if (sg.id === sgId) {
-          const log: ProgressLog = {
-            id: crypto.randomUUID(), goal_id: sg.year_goal_id, subgoal_id: sg.id, timestamp: new Date().toISOString(), value, confidence: 5, is_verified: forceVerify, verified_by: forceVerify ? 'self' : undefined, user_id: user.id
-          };
+          const log: ProgressLog = { id: crypto.randomUUID(), goal_id: sg.year_goal_id, subgoal_id: sg.id, timestamp: new Date().toISOString(), value, confidence: 5, is_verified: forceVerify, verified_by: forceVerify ? 'self' : undefined, user_id: user.id };
           setGoals(gPrev => gPrev.map(g => {
             if (g.id === sg.year_goal_id) {
               const updatedLogs = [...(g.logs || []), log];
@@ -97,9 +112,9 @@ export function useStore() {
         }
         return sg;
       }));
-    },
+    }),
     
-    verifyProgress: (gId: string, lId: string, vId: string, rating?: number, comment?: string) => {
+    verifyProgress: (gId: string, lId: string, vId: string, rating?: number, comment?: string) => checkDemo(() => {
        setGoals(prev => prev.map(g => {
          if (g.id === gId) {
            const updatedLogs = (g.logs || []).map(l => l.id === lId ? { ...l, is_verified: true, verified_by: vId, rating, comment } : l);
@@ -108,21 +123,19 @@ export function useStore() {
          }
          return g;
        }));
-    },
+    }),
     
-    // Feature: Finance
-    addTransaction: (amount: number, type: 'income' | 'expense', category: string, note?: string) => {
+    addTransaction: (amount: number, type: 'income' | 'expense', category: string, note?: string) => checkDemo(() => {
       const newTx: Transaction = { id: crypto.randomUUID(), amount, type, category, note, timestamp: new Date().toISOString() };
       setTransactions(p => [...p, newTx]);
       setUser(prev => ({ ...prev, financials: { ...prev.financials!, total_assets: type === 'income' ? prev.financials!.total_assets + amount : prev.financials!.total_assets - amount } }));
-    },
+    }),
     
-    // System
-    addPartner: (name: string, role: string) => setPartners(p => [...p, { id: crypto.randomUUID(), name, role: role as PartnerRole, avatar: `https://i.pravatar.cc/150?u=${name}`, xp: 0 }]),
-    addDebt: (d: any) => setDebts(prev => [...prev, { ...d, id: crypto.randomUUID() }]),
-    addSubscription: (s: any) => setSubscriptions(prev => [...prev, { ...s, id: crypto.randomUUID() }]),
-    toggleGoalPrivacy: (id: string) => setGoals(p => p.map(g => g.id === id ? {...g, is_private: !g.is_private} : g)),
-    updateUserInfo: (d: any) => setUser(p => ({...p, ...d})),
+    addPartner: (name: string, role: string) => checkDemo(() => setPartners(p => [...p, { id: crypto.randomUUID(), name, role: role as PartnerRole, avatar: `https://i.pravatar.cc/150?u=${name}`, xp: 0 }])),
+    addDebt: (d: any) => checkDemo(() => setDebts(prev => [...prev, { ...d, id: crypto.randomUUID() }])),
+    addSubscription: (s: any) => checkDemo(() => setSubscriptions(prev => [...prev, { ...s, id: crypto.randomUUID() }])),
+    toggleGoalPrivacy: (id: string) => checkDemo(() => setGoals(p => p.map(g => g.id === id ? {...g, is_private: !g.is_private} : g))),
+    updateUserInfo: (d: any) => checkDemo(() => setUser(p => ({...p, ...d}))),
     resetData: () => { localStorage.clear(); window.location.reload(); },
     generateGoalVision
   };

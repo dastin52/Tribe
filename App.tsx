@@ -110,7 +110,7 @@ const App: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-col gap-3">
-            <button onClick={() => store.setView(AppView.DASHBOARD)} className="w-full py-5 bg-slate-900 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">Войти в Tribe</button>
+            <button onClick={() => store.setView(AppView.DASHBOARD)} className="w-full py-5 bg-slate-900 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">Смотреть демо</button>
           </div>
         </div>
       </div>
@@ -119,6 +119,12 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={store.view} setView={store.setView}>
+      {store.isDemo && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-1.5 bg-amber-500 text-white text-[8px] font-black rounded-full uppercase tracking-widest shadow-lg animate-pulse">
+          Демонстрационный режим
+        </div>
+      )}
+
       {store.view === AppView.DASHBOARD && (
         <DashboardView 
           user={store.user} meetings={store.meetings} todayTasks={todayTasks} 
@@ -276,6 +282,27 @@ const App: React.FC = () => {
                       );
                     })}
                  </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Модальное окно регистрации при клике на действия в демо */}
+      {store.showRegPrompt && (
+        <div className="fixed inset-0 z-[300] bg-slate-900/60 backdrop-blur-md flex items-end justify-center animate-fade-in p-4">
+           <div className="w-full max-w-sm bg-white rounded-[3rem] p-10 space-y-8 shadow-2xl animate-scale-up">
+              <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white text-3xl mx-auto shadow-xl">
+                 <i className="fa-solid fa-rocket"></i>
+              </div>
+              <div className="text-center space-y-3">
+                 <h3 className="text-3xl font-black text-slate-900 italic tracking-tighter uppercase">Твоя очередь</h3>
+                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
+                   Ты увидел как работает Племя. <br/> Пора создать свою историю, <br/> наполнить капитал и найти наставников.
+                 </p>
+              </div>
+              <div className="space-y-3">
+                 <button onClick={store.startMyOwnJourney} className="w-full py-6 bg-slate-900 text-white font-black rounded-3xl uppercase tracking-widest text-[11px] italic shadow-xl active:scale-95 transition-all">Начать свой путь</button>
+                 <button onClick={() => store.setShowRegPrompt(false)} className="w-full py-4 text-slate-400 font-black uppercase tracking-widest text-[9px] italic">Продолжить обзор</button>
               </div>
            </div>
         </div>
