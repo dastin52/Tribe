@@ -45,14 +45,6 @@ export interface SubGoal {
   is_completed?: boolean;
 }
 
-export interface Project {
-  id: string;
-  subgoal_id: string;
-  owner_id: string;
-  title: string;
-  status: 'planned' | 'active' | 'completed';
-}
-
 export interface Debt {
   id: string;
   title: string;
@@ -155,9 +147,9 @@ export enum AppView {
   FINANCE = 'finance'
 }
 
-// Новые типы для Арены 2.0
-export type CellType = 'asset' | 'event' | 'tax' | 'start';
-export type AssetDistrict = 'tech' | 'realestate' | 'energy' | 'crypto';
+// Арена 3.0 - Глубокая экономика
+export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison';
+export type AssetDistrict = 'tech' | 'realestate' | 'energy' | 'web3' | 'health' | 'edu';
 
 export interface BoardCell {
   id: number;
@@ -166,25 +158,34 @@ export interface BoardCell {
   title: string;
   cost?: number;
   rent?: number;
-  ownerId?: string;
+  ownerId?: string; // id игрока (user.id или id партнера)
   icon: string;
+}
+
+export interface GamePlayer {
+  id: string;
+  name: string;
+  avatar: string;
+  position: number;
+  cash: number;
+  isBankrupt: boolean;
+  cards: string[];
 }
 
 export interface GameOffer {
   id: string;
-  fromPlayer: string;
+  fromPlayerId: string;
+  toPlayerId: string;
   assetId: number;
   price: number;
   status: 'pending' | 'accepted' | 'declined';
 }
 
 export interface GameState {
-  playerPosition: number;
-  cash: number;
-  ownedAssets: number[]; // id клеток
+  players: GamePlayer[];
+  currentPlayerIndex: number;
   history: string[];
-  cards: string[]; // Названия карт влияния
   activeOffers: GameOffer[];
-  turn: number;
+  turnNumber: number;
   isTutorialComplete: boolean;
 }

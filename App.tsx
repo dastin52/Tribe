@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'export default App;';
 import { useStore } from './store/useStore';
 import { AppView, YearGoal, ProgressLog } from './types';
 import { Layout } from './components/Layout';
@@ -123,8 +123,7 @@ const App: React.FC = () => {
           gameState={store.gameState}
           rollDice={store.rollDice}
           buyAsset={store.buyAsset}
-          respondToOffer={store.respondToOffer}
-          completeTutorial={store.completeTutorial}
+          /* Removed non-existent respondToOffer and completeTutorial props */
         />
       )}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}

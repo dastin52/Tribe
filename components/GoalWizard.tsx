@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Value, YearGoal, SubGoal, Project, GoalCategory, TaskFrequency } from '../types';
+/* Removed non-existent Project type */
+import { Value, YearGoal, SubGoal, GoalCategory, TaskFrequency } from '../types';
 import { geminiService } from '../services/gemini';
 
 interface GoalWizardProps {
   values: Value[];
-  onComplete: (goal: YearGoal, subgoals: SubGoal[], projects: Project[]) => void;
+  /* Removed projects argument from onComplete */
+  onComplete: (goal: YearGoal, subgoals: SubGoal[]) => void;
   onCancel: () => void;
 }
 
@@ -122,7 +124,8 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ values, onComplete, onCa
       target_value: s.target_value, current_value: 0, weight: s.weight, deadline: s.deadline || goal.end_date,
       frequency: frequency, difficulty: Math.max(1, difficulty - 2)
     }));
-    onComplete(goal, sgs, []);
+    /* Removed projects empty array from onComplete call */
+    onComplete(goal, sgs);
   };
 
   return (

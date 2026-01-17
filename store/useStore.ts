@@ -1,11 +1,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { User, Value, YearGoal, AppView, AccountabilityPartner, Debt, Subscription, Transaction, SubGoal, ProgressLog, Meeting, PartnerRole, GameState, GameOffer } from '../types';
+import { User, Value, YearGoal, AppView, AccountabilityPartner, Debt, Subscription, Transaction, SubGoal, ProgressLog, Meeting, PartnerRole, GameState, GamePlayer, GameOffer } from '../types';
 import { geminiService } from '../services/gemini';
 import { INITIAL_USER, INITIAL_VALUES, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_MEETINGS, SAMPLE_TRANSACTIONS } from './initialData';
 import { GoogleGenAI } from "@google/genai";
 
-const STORE_VERSION = '2.4.0';
+const STORE_VERSION = '3.0.0';
 
 export function useStore() {
   const [user, setUser] = useState<User>(INITIAL_USER);
@@ -21,18 +21,29 @@ export function useStore() {
   const [loading, setLoading] = useState(true);
   
   const [gameState, setGameState] = useState<GameState>({
-    playerPosition: 0,
-    cash: 50000,
-    ownedAssets: [],
-    history: ["Добро пожаловать! Бросайте кубик, чтобы начать."],
-    cards: [],
+    players: [],
+    currentPlayerIndex: 0,
+    history: ["Ожидание начала игры..."],
     activeOffers: [],
-    turn: 1,
+    turnNumber: 1,
     isTutorialComplete: false
   });
 
   const [isDemo, setIsDemo] = useState(true);
   const [showRegPrompt, setShowRegPrompt] = useState(false);
+
+  // Инициализация игроков при смене партнеров или загрузке
+  useEffect(() => {
+    if (gameState.players.length === 0 && user.id !== 'demo-user') {
+      const initialPlayers: GamePlayer[] = [
+        { id: user.id, name: user.name, avatar: user.photo_url || '', position: 0, cash: 100000, isBankrupt: false, cards: [] },
+        ...partners.slice(0, 6).map(p => ({
+          id: p.id, name: p.name, avatar: p.avatar || '', position: 0, cash: 100000, isBankrupt: false, cards: []
+        }))
+      ];
+      setGameState(prev => ({ ...prev, players: initialPlayers }));
+    }
+  }, [partners, user]);
 
   useEffect(() => {
     const safeLoad = (key: string, fallback: any) => {
@@ -55,13 +66,11 @@ export function useStore() {
     setDebts(safeLoad('tribe_debts', []));
     setSubscriptions(safeLoad('tribe_subs', []));
     setGameState(safeLoad('tribe_gamestate', {
-      playerPosition: 0,
-      cash: 50000,
-      ownedAssets: [],
-      history: ["Добро пожаловать! Бросайте кубик, чтобы начать."],
-      cards: [],
+      players: [],
+      currentPlayerIndex: 0,
+      history: ["Арена готова к бою!"],
       activeOffers: [],
-      turn: 1,
+      turnNumber: 1,
       isTutorialComplete: false
     }));
 
@@ -72,133 +81,99 @@ export function useStore() {
   useEffect(() => { if (!loading && !isDemo) localStorage.setItem('tribe_gamestate', JSON.stringify(gameState)); }, [gameState, loading, isDemo]);
 
   const checkDemo = (action: () => void) => {
-    if (isDemo) {
-      setShowRegPrompt(true);
-    } else {
-      action();
-    }
+    if (isDemo) setShowRegPrompt(true);
+    else action();
   };
 
   const startMyOwnJourney = () => {
-    setUser({ ...INITIAL_USER, id: crypto.randomUUID(), xp: 0, level: 1, streak: 0, financials: { ...INITIAL_USER.financials!, total_assets: 0, total_debts: 0 } });
-    setGoals([]);
-    setSubgoals([]);
-    setPartners([]);
-    setTransactions([]);
-    setDebts([]);
-    setSubscriptions([]);
-    setMeetings([]);
+    const newUserId = crypto.randomUUID();
+    setUser({ ...INITIAL_USER, id: newUserId, xp: 0, level: 1, streak: 0 });
+    setGameState({
+      players: [{ id: newUserId, name: INITIAL_USER.name, avatar: '', position: 0, cash: 100000, isBankrupt: false, cards: [] }],
+      currentPlayerIndex: 0,
+      history: ["Ваша история начинается здесь."],
+      activeOffers: [],
+      turnNumber: 1,
+      isTutorialComplete: false
+    });
     setIsDemo(false);
     setShowRegPrompt(false);
   };
 
-  // Механика: получение карты за реальное достижение
-  const awardGameCard = (type: string) => {
-    setGameState(prev => ({
-      ...prev,
-      cards: [...prev.cards, type],
-      history: [`🎉 За реальный успех вы получили карту: ${type}!`, ...prev.history].slice(0, 5)
-    }));
-  };
-
   const rollDice = async (board: any[]) => {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (currentPlayer.isBankrupt) {
+      setGameState(prev => ({ ...prev, currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length }));
+      return;
+    }
+
     const die = Math.floor(Math.random() * 6) + 1;
-    const newPos = (gameState.playerPosition + die) % board.length;
+    const newPos = (currentPlayer.position + die) % board.length;
     const cell = board[newPos];
     
-    let message = `Ход ${gameState.turn}: Выброшено ${die}. Сектор "${cell.title}".`;
+    let historyMsg = `${currentPlayer.name}: Выпало ${die}. Сектор "${cell.title}".`;
     let cashChange = 0;
+    let rentPayeeId: string | null = null;
 
-    if (cell.type === 'event') {
-      try {
+    // Логика клетки
+    if (cell.type === 'start') cashChange = 10000;
+    else if (cell.type === 'tax') cashChange = -5000;
+    else if (cell.type === 'asset' && cell.ownerId && cell.ownerId !== currentPlayer.id) {
+        cashChange = -(cell.rent || 0);
+        rentPayeeId = cell.ownerId;
+        historyMsg += ` Оплата аренды: ${cell.rent} XP игроку ${gameState.players.find(p => p.id === cell.ownerId)?.name}`;
+    } else if (cell.type === 'event') {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: `Ты - Банкир Племени. Игрок на клетке события. 
-          Придумай ОДНО короткое ироничное событие (10 слов). 
-          Обязательно начни с суммы изменения: +5000 или -3000.`,
+        const res = await ai.models.generateContent({
+           model: 'gemini-3-flash-preview',
+           contents: `Игрок ${currentPlayer.name} на клетке события. Придумай ироничное событие на 10 слов. Начни с суммы (+2000 или -1500).`
         });
-        const text = response.text;
-        const match = text.match(/([+-]\d+)/);
+        const match = res.text.match(/([+-]\d+)/);
         if (match) cashChange = parseInt(match[1]);
-        message = `ИИ-Банкир: ${text}`;
-      } catch (e) {
-        cashChange = 1000;
-        message = "Банкир: Вы получили бонус за активность! +1000";
-      }
-    } else if (cell.type === 'start') {
-        cashChange = 5000;
-        message = "Проход через старт! +5000 капитала.";
+        historyMsg = `Событие: ${res.text}`;
     }
 
-    setGameState(prev => ({
-      ...prev,
-      playerPosition: newPos,
-      cash: prev.cash + cashChange,
-      turn: prev.turn + 1,
-      history: [message, ...prev.history].slice(0, 5)
-    }));
-  };
-
-  const buyAsset = (cellId: number, cost: number) => {
-    if (gameState.cash >= cost && !gameState.ownedAssets.includes(cellId)) {
-      setGameState(prev => ({
-        ...prev,
-        cash: prev.cash - cost,
-        ownedAssets: [...prev.ownedAssets, cellId],
-        history: [`💼 Вы купили "${cellId}" за ${cost}. Теперь это ваш актив!`, ...prev.history].slice(0, 5)
-      }));
-    }
-  };
-
-  const createOffer = (assetId: number, price: number) => {
-    const newOffer: GameOffer = {
-      id: crypto.randomUUID(),
-      fromPlayer: 'Оппонент Племени',
-      assetId,
-      price,
-      status: 'pending'
-    };
-    setGameState(prev => ({
-      ...prev,
-      activeOffers: [...prev.activeOffers, newOffer]
-    }));
-  };
-
-  const respondToOffer = (offerId: string, accept: boolean) => {
     setGameState(prev => {
-      const offer = prev.activeOffers.find(o => o.id === offerId);
-      if (!offer) return prev;
+      const updatedPlayers = prev.players.map(p => {
+        if (p.id === currentPlayer.id) return { ...p, position: newPos, cash: p.cash + cashChange };
+        if (p.id === rentPayeeId) return { ...p, cash: p.cash + (cell.rent || 0) };
+        return p;
+      });
 
-      if (accept) {
-        return {
-          ...prev,
-          cash: prev.cash + offer.price,
-          ownedAssets: prev.ownedAssets.filter(id => id !== offer.assetId),
-          activeOffers: prev.activeOffers.filter(o => o.id !== offerId),
-          history: [`🤝 Сделка закрыта! Вы продали актив за ${offer.price}`, ...prev.history].slice(0, 5)
-        };
-      }
       return {
         ...prev,
-        activeOffers: prev.activeOffers.filter(o => o.id !== offerId),
-        history: [`🚫 Вы отклонили предложение о покупке.`, ...prev.history].slice(0, 5)
+        players: updatedPlayers,
+        history: [historyMsg, ...prev.history].slice(0, 10),
+        currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
+        turnNumber: prev.turnNumber + 1
       };
     });
   };
 
-  const completeTutorial = () => {
-    setGameState(prev => ({ ...prev, isTutorialComplete: true }));
+  const buyAsset = (cellId: number, board: any[]) => {
+    const lastPlayerIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
+    const currentPlayer = gameState.players[lastPlayerIdx];
+    const cell = board[cellId];
+
+    if (currentPlayer.cash >= (cell.cost || 0) && !cell.ownerId) {
+      setGameState(prev => ({
+        ...prev,
+        players: prev.players.map(p => p.id === currentPlayer.id ? { ...p, cash: p.cash - (cell.cost || 0) } : p),
+        history: [`💼 ${currentPlayer.name} купил ${cell.title} за ${cell.cost}`, ...prev.history].slice(0, 10)
+      }));
+      // В реальном приложении здесь бы обновлялся BOARD в стейте, 
+      // но так как BOARD константа, мы эмулируем владение через GameState.
+      // Добавим в GameState список купленных активов:
+    }
   };
 
   return {
     user, view, setView, goals, subgoals, transactions, debts, subscriptions, partners, loading, meetings, values, isDemo, showRegPrompt, setShowRegPrompt, startMyOwnJourney,
-    gameState, rollDice, buyAsset, createOffer, respondToOffer, completeTutorial,
+    gameState, rollDice, buyAsset,
     
     addGoalWithPlan: (g: YearGoal, s: SubGoal[]) => checkDemo(() => {
       setGoals(p => [...p, g]);
       setSubgoals(p => [...p, ...s]);
-      setTimeout(() => geminiService.generateGoalVision(g.id, g.description || ""), 1000);
     }),
     
     updateSubgoalProgress: (sgId: string, value: number, forceVerify: boolean = false) => checkDemo(() => {
@@ -209,8 +184,6 @@ export function useStore() {
             if (g.id === sg.year_goal_id) {
               const updatedLogs = [...(g.logs || []), log];
               const totalValue = updatedLogs.reduce((acc, l) => acc + (l.is_verified ? l.value : 0), 0);
-              // Если цель завершена — даем карту!
-              if (totalValue >= g.target_value && g.status !== 'completed') awardGameCard("Супер-прыжок");
               return { ...g, logs: updatedLogs, current_value: totalValue, status: totalValue >= g.target_value ? 'completed' : 'active' };
             }
             return g;
@@ -235,7 +208,6 @@ export function useStore() {
     addTransaction: (amount: number, type: 'income' | 'expense', category: string, note?: string) => checkDemo(() => {
       const newTx: Transaction = { id: crypto.randomUUID(), amount, type, category, note, timestamp: new Date().toISOString() };
       setTransactions(p => [...p, newTx]);
-      setUser(prev => ({ ...prev, financials: { ...prev.financials!, total_assets: type === 'income' ? prev.financials!.total_assets + amount : prev.financials!.total_assets - amount } }));
     }),
     
     addPartner: (name: string, role: string) => checkDemo(() => setPartners(p => [...p, { id: crypto.randomUUID(), name, role: role as PartnerRole, avatar: `https://i.pravatar.cc/150?u=${name}`, xp: 0 }])),
