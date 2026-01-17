@@ -6,11 +6,11 @@ import { INITIAL_USER, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_TR
 const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
 
 const EVENTS = [
-  { title: "Грант от Племени", text: "Твой проект заметили! Получи +15,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: p.cash + 15000 }) },
-  { title: "Технический сбой", text: "Сервер упал в неподходящий момент. Потеря -8,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: Math.max(0, p.cash - 8000) }) },
-  { title: "Бычий рынок", text: "Активы растут! Все владельцы получают по +5,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: p.cash + 5000 }) },
-  { title: "Налоговая проверка", text: "Нужно заплатить за прозрачность. -10,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: Math.max(0, p.cash - 10000) }) },
-  { title: "Инсайд", text: "Ты узнал секрет рынка. Получи +12,000 XP", effect: (p: GamePlayer) => ({ ...p, cash: p.cash + 12000 }) }
+  { title: "Грант от Племени", text: "Твой проект заметили! Получи +15,000 XP", amount: 15000 },
+  { title: "Технический сбой", text: "Сервер упал. Потеря -8,000 XP", amount: -8000 },
+  { title: "Бычий рынок", text: "Активы растут! Получи +5,000 XP", amount: 5000 },
+  { title: "Налоговая проверка", text: "Нужно заплатить за прозрачность. -10,000 XP", amount: -10000 },
+  { title: "Инсайд", text: "Ты узнал секрет рынка. Получи +12,000 XP", amount: 12000 }
 ];
 
 export function useStore() {
@@ -37,7 +37,6 @@ export function useStore() {
     lastRoll: null
   });
 
-  // Синхронизация с сервером (Push)
   const syncWithServer = async (update: Partial<GameState>) => {
     if (!gameState.lobbyId) return;
     try {
@@ -50,11 +49,13 @@ export function useStore() {
         const data = await res.json();
         setGameState(prev => ({ ...prev, ...data }));
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Sync error:", e);
+    }
   };
 
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
+    const tg = (window as any).Telegram?.WebApp;
     if (!tg) return;
     tg.ready();
     if (tg.initDataUnsafe?.user) {
@@ -83,16 +84,17 @@ export function useStore() {
     if (!gameState.lobbyId || !user.id || user.id.startsWith('anon-')) return;
     const register = async () => {
       try {
+        const isHost = !(window as any).Telegram?.WebApp?.initDataUnsafe?.start_param;
         const me: GamePlayer = {
           id: user.id,
           name: user.name,
-          avatar: user.photo_url || '',
+          avatar: user.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`,
           position: 0,
           cash: 50000,
           isBankrupt: false,
           deposits: [],
           ownedAssets: [],
-          isHost: !window.Telegram?.WebApp?.initDataUnsafe?.start_param
+          isHost: isHost
         };
         const res = await fetch(`${API_BASE}/join`, {
           method: 'POST',
@@ -117,7 +119,7 @@ export function useStore() {
         if (!res.ok) return;
         const data = await res.json();
         setGameState(prev => {
-          if (JSON.stringify(prev) === JSON.stringify({ ...prev, ...data })) return prev;
+          // Если статус изменился на playing, а мы все еще в lobby - обновляемся
           return { ...prev, ...data };
         });
       } catch (e) {}
@@ -129,7 +131,6 @@ export function useStore() {
     if (gameState.lastRoll) return;
     const roll = Math.floor(Math.random() * 6) + 1;
     
-    // Сначала локальная анимация для отзывчивости
     setGameState(prev => ({ ...prev, lastRoll: roll }));
 
     setTimeout(async () => {
@@ -138,13 +139,12 @@ export function useStore() {
       const cell = board[newPos];
       
       let newPlayers = [...gameState.players];
-      let newHistory = [`${currentPlayer.name} выбросил ${roll} и перешел на ${cell.title}`, ...gameState.history];
+      let newHistory = [`${currentPlayer.name} выбросил ${roll} и зашел на ${cell.title}`, ...gameState.history];
       
-      // Логика событий
       if (cell.type === 'event' || cell.type === 'tax') {
         const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-        newPlayers = newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? event.effect(p) : p);
-        newHistory.unshift(`СОБЫТИЕ: ${event.title}! ${event.text}`);
+        newPlayers = newPlayers.map((p, i) => i === gameState.currentPlayerIndex ? { ...p, cash: Math.max(0, p.cash + event.amount) } : p);
+        newHistory.unshift(`⚡️ СОБЫТИЕ: ${event.title}! ${event.text}`);
       }
 
       const update = {
@@ -152,7 +152,7 @@ export function useStore() {
         lastRoll: null,
         currentPlayerIndex: (gameState.currentPlayerIndex + 1) % gameState.players.length,
         turnNumber: gameState.turnNumber + 1,
-        history: newHistory.slice(0, 15)
+        history: newHistory.slice(0, 20)
       };
 
       await syncWithServer(update);
@@ -172,7 +172,7 @@ export function useStore() {
           cash: p.cash - (cell.cost || 0), 
           ownedAssets: [...p.ownedAssets, cellId] 
         } : p),
-        history: [`${player.name} захватил сектор ${cell.title}!`, ...gameState.history].slice(0, 15)
+        history: [`💎 ${player.name} инвестировал в ${cell.title}!`, ...gameState.history].slice(0, 20)
       };
       await syncWithServer(update);
     }
@@ -186,19 +186,36 @@ export function useStore() {
     }
   };
 
-  const generateInviteLink = () => {
-    const botUsername = "tribe_goals_bot"; 
-    const link = `https://t.me/${botUsername}/app?startapp=${gameState.lobbyId}`;
-    if (window.Telegram?.WebApp) {
-      const shareText = `Вступай в моё Племя! Код лобби: ${gameState.lobbyId} 🚀`;
-      window.Telegram.WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(shareText)}`);
-    }
-  };
-
   const startGame = async () => {
     if (!gameState.lobbyId) return;
-    await syncWithServer({ status: 'playing', turnNumber: 1, currentPlayerIndex: 0 });
+    // Явно отправляем команду старта на сервер
+    await syncWithServer({ 
+      status: 'playing', 
+      turnNumber: 1, 
+      currentPlayerIndex: 0,
+      history: ["🚀 Игра началась! Первый ход у Вождя."]
+    });
   };
+
+  // Fixed: Added generateInviteLink implementation to resolve shorthand property error
+  const generateInviteLink = useCallback(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg || !gameState.lobbyId) return;
+    
+    // In Telegram context, usually sharing a link with startapp parameter
+    const inviteLink = `https://t.me/share/url?url=https://t.me/TribeSocialOS_bot?start=${gameState.lobbyId}&text=${encodeURIComponent('Присоединяйся к моей игре в Tribe Arena!')}`;
+    
+    if (tg.openTelegramLink) {
+      tg.openTelegramLink(inviteLink);
+    } else {
+      navigator.clipboard.writeText(gameState.lobbyId);
+      if (tg.showAlert) {
+        tg.showAlert(`Код лобби ${gameState.lobbyId} скопирован в буфер обмена!`);
+      } else {
+        alert(`Код лобби ${gameState.lobbyId} скопирован в буфер обмена!`);
+      }
+    }
+  }, [gameState.lobbyId]);
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,

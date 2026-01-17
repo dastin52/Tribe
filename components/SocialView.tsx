@@ -3,12 +3,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { GameState, BoardCell, GamePlayer } from '../types';
 
 const DISTRICT_COLORS: Record<string, string> = {
-  tech: 'bg-cyan-500/20 border-cyan-400 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]',
-  realestate: 'bg-amber-500/20 border-amber-400 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]',
-  health: 'bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.4)]',
-  energy: 'bg-rose-500/20 border-rose-400 text-rose-400 shadow-[0_0_20px_rgba(251,113,133,0.4)]',
-  web3: 'bg-violet-500/20 border-violet-400 text-violet-400 shadow-[0_0_20px_rgba(167,139,250,0.4)]',
-  edu: 'bg-blue-500/20 border-blue-400 text-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.4)]'
+  tech: 'bg-cyan-900/40 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]',
+  realestate: 'bg-amber-900/40 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]',
+  health: 'bg-emerald-900/40 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)]',
+  energy: 'bg-rose-900/40 border-rose-400 text-rose-300 shadow-[0_0_15px_rgba(251,113,133,0.3)]',
+  web3: 'bg-violet-900/40 border-violet-400 text-violet-300 shadow-[0_0_15px_rgba(167,139,250,0.3)]',
+  edu: 'bg-blue-900/40 border-blue-400 text-blue-300 shadow-[0_0_15px_rgba(96,165,250,0.3)]'
 };
 
 const BOARD: BoardCell[] = ([
@@ -49,7 +49,7 @@ interface SocialViewProps {
   currentUserId: string;
 }
 
-export const SocialView: React.FC<SocialViewProps & { currentUserId: string }> = ({ 
+export const SocialView: React.FC<SocialViewProps> = ({ 
   gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, currentUserId 
 }) => {
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
@@ -58,7 +58,8 @@ export const SocialView: React.FC<SocialViewProps & { currentUserId: string }> =
   
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === currentUserId;
-  const isMeHost = gameState.players.length > 0 && gameState.players[0].isHost;
+  // Более надежная проверка хоста по ID
+  const isMeHost = gameState.players.find(p => p.id === currentUserId)?.isHost;
 
   useEffect(() => {
     if (gameState.lastRoll) {
@@ -68,41 +69,66 @@ export const SocialView: React.FC<SocialViewProps & { currentUserId: string }> =
   }, [gameState.lastRoll]);
 
   const narratorMessage = useMemo(() => {
-    return gameState.history[0] || "Ожидание хода...";
+    return gameState.history[0] || "Племя готово к вызову...";
   }, [gameState.history]);
 
   if (gameState.status === 'lobby') {
     return (
-      <div className="flex flex-col min-h-full animate-fade-in p-2 space-y-4">
+      <div className="flex flex-col min-h-full animate-fade-in p-4 space-y-4">
         <div className="bg-[#020617] rounded-[3.5rem] border-4 border-[#1e293b] p-8 space-y-8 relative overflow-hidden shadow-2xl flex flex-col items-center">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.15),transparent)]"></div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.2),transparent)]"></div>
+          
           <div className="relative z-10 text-center space-y-4 w-full">
-            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.2rem] flex items-center justify-center text-3xl shadow-[0_0_30px_rgba(99,102,241,0.3)] mx-auto border-4 border-white/10">
+            <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto border-4 border-white/10 animate-pulse">
               <i className="fa-solid fa-users-rays text-white"></i>
             </div>
-            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter">ПЛЕМЯ</h2>
-            <div className="bg-indigo-500/10 px-4 py-2 rounded-full border border-indigo-500/20 flex items-center gap-2 mx-auto w-fit">
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic">ID: {gameState.lobbyId}</span>
+            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter">ЗАЛ ОЖИДАНИЯ</h2>
+            <div className="bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/30 flex items-center gap-2 mx-auto w-fit">
+              <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
             </div>
           </div>
+
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {gameState.players.map(p => (
-              <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500/50' : 'border-white/10'}`}>
-                <div className="w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 border-slate-700">
+              <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500 shadow-indigo-500/20' : 'border-white/10'}`}>
+                <div className={`w-16 h-16 rounded-[1.5rem] overflow-hidden border-2 ${p.isHost ? 'border-indigo-400' : 'border-slate-700'}`}>
                   <img src={p.avatar} className="w-full h-full object-cover" onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
                 </div>
-                <span className="font-black italic uppercase text-[10px] text-white block truncate">{p.name}</span>
+                <div className="text-center">
+                  <span className="font-black italic uppercase text-[10px] text-white block truncate w-24">{p.name}</span>
+                  <span className={`text-[7px] font-black uppercase tracking-widest block mt-1 ${p.isHost ? 'text-indigo-400' : 'text-slate-500'}`}>{p.isHost ? 'ВОЖДЬ' : 'СОЮЗНИК'}</span>
+                </div>
               </div>
             ))}
           </div>
-          <div className="w-full space-y-3 pt-2 relative z-10">
-            <button onClick={generateInviteLink} className="w-full py-5 bg-indigo-600 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">ПОЗВАТЬ СВОИХ</button>
-            {isMeHost && <button disabled={gameState.players.length < 2} onClick={startGame} className="w-full py-5 bg-white text-slate-900 rounded-[1.8rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all disabled:opacity-20">В БОЙ!</button>}
+
+          <div className="w-full space-y-4 pt-4 relative z-10">
+            <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+              <i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ
+            </button>
+            
+            {isMeHost ? (
+               <button 
+                disabled={gameState.players.length < 2}
+                onClick={startGame}
+                className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center gap-3"
+              >
+                <i className="fa-solid fa-play"></i> В БОЙ!
+              </button>
+            ) : (
+               <div className="w-full py-6 bg-white/5 border border-white/10 rounded-[2rem] text-slate-400 font-black text-[10px] uppercase tracking-widest text-center italic animate-pulse">
+                 Ждем команды Вождя...
+               </div>
+            )}
           </div>
         </div>
-        <div className="bg-white border border-slate-100 rounded-[2.5rem] p-6 space-y-4">
-           <input type="text" placeholder="ВВЕДИ КОД ЛОББИ..." maxLength={6} value={manualCode} onChange={e => setManualCode(e.target.value.toUpperCase())} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-sm uppercase tracking-widest outline-none focus:border-indigo-500 transition-all" />
-           <button onClick={() => { joinLobbyManual(manualCode); setManualCode(''); }} disabled={manualCode.length < 4} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">ПРИСОЕДИНИТЬСЯ</button>
+        
+        <div className="bg-white border-2 border-slate-100 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
+           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic px-2">Если ссылка не сработала:</h3>
+           <div className="flex gap-2">
+              <input type="text" placeholder="КОД ЛОББИ..." maxLength={6} value={manualCode} onChange={e => setManualCode(e.target.value.toUpperCase())} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 font-black text-sm uppercase tracking-widest outline-none focus:border-indigo-500 transition-all" />
+              <button onClick={() => { joinLobbyManual(manualCode); setManualCode(''); }} disabled={manualCode.length < 4} className="px-6 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest active:scale-95 disabled:opacity-20">ВХОД</button>
+           </div>
         </div>
       </div>
     );
@@ -110,39 +136,42 @@ export const SocialView: React.FC<SocialViewProps & { currentUserId: string }> =
 
   return (
     <div className="space-y-6 animate-fade-in pb-24 relative px-1 bg-slate-50 min-h-full">
-      {/* DICE ANIMATION */}
+      {/* DICE EFFECT */}
       {showDiceEffect && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl animate-fade-in">
-          <div className="w-48 h-48 bg-white rounded-[3rem] shadow-[0_0_100px_rgba(255,255,255,0.4)] flex flex-col items-center justify-center text-slate-900 animate-bounce border-8 border-indigo-100">
-             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">ВЫПАЛО</span>
-             <span className="text-9xl font-black italic">{gameState.lastRoll}</span>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-950/80 backdrop-blur-2xl animate-fade-in">
+          <div className="w-56 h-56 bg-white rounded-[4rem] shadow-[0_0_80px_rgba(99,102,241,0.5)] flex flex-col items-center justify-center text-slate-900 animate-bounce border-8 border-indigo-100">
+             <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">ВЫПАЛО</span>
+             <span className="text-[10rem] font-black italic leading-none">{gameState.lastRoll}</span>
           </div>
         </div>
       )}
 
       {/* AI NARRATOR / ВЕДУЩИЙ */}
-      <div className="mx-2 p-6 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border-2 border-indigo-500/30">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center animate-pulse">
-            <i className="fa-solid fa-headset text-white text-xs"></i>
+      <div className="mx-2 p-6 bg-[#0f172a] rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border-2 border-indigo-500/50 group">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
+        <div className="flex items-center gap-5 relative z-10">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/40 animate-pulse">
+            <i className="fa-solid fa-microphone-lines text-white text-lg"></i>
           </div>
           <div>
-            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] block italic">ГОЛОС ПЛЕМЕНИ</span>
-            <p className="text-xs font-bold leading-tight italic mt-1 text-slate-200">"{narratorMessage}"</p>
+            <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.4em] block italic mb-1">ГОЛОС ПЛЕМЕНИ</span>
+            <p className="text-sm font-bold leading-tight italic text-slate-100 line-clamp-2">"{narratorMessage}"</p>
           </div>
         </div>
       </div>
 
       {/* PLAYERS STRIP */}
-      <div className="flex gap-3 overflow-x-auto no-scrollbar px-3 py-2">
+      <div className="flex gap-4 overflow-x-auto no-scrollbar px-4 py-2">
         {gameState.players.map((p, idx) => (
-          <div key={p.id} className={`flex-shrink-0 p-4 rounded-[2rem] border-2 transition-all duration-500 min-w-[140px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-[0_15px_30px_rgba(79,70,229,0.2)] scale-105' : 'bg-white/50 border-slate-200 text-slate-400'}`}>
-            <div className="flex items-center gap-3">
-              <img src={p.avatar} className={`w-10 h-10 rounded-xl object-cover border-2 ${gameState.currentPlayerIndex === idx ? 'border-indigo-400' : 'border-slate-200 opacity-40'}`} onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
+          <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[150px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-2xl scale-105' : 'bg-white/40 border-slate-100 text-slate-400'}`}>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <img src={p.avatar} className={`w-12 h-12 rounded-2xl object-cover border-2 ${gameState.currentPlayerIndex === idx ? 'border-indigo-400 shadow-md' : 'border-slate-200 grayscale opacity-60'}`} onError={e => e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`} />
+                {gameState.currentPlayerIndex === idx && <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-ping"></div>}
+              </div>
               <div className="text-left">
-                <span className="text-[10px] font-black uppercase italic block truncate w-16">{p.name}</span>
-                <span className={`text-[8px] font-black ${gameState.currentPlayerIndex === idx ? 'text-indigo-600' : 'text-slate-400'}`}>{Math.round(p.cash).toLocaleString()} XP</span>
+                <span className="text-[11px] font-black uppercase italic block truncate w-16">{p.name}</span>
+                <span className={`text-[9px] font-black ${gameState.currentPlayerIndex === idx ? 'text-indigo-600' : 'text-slate-400'}`}>{Math.round(p.cash).toLocaleString()} XP</span>
               </div>
             </div>
           </div>
@@ -150,94 +179,127 @@ export const SocialView: React.FC<SocialViewProps & { currentUserId: string }> =
       </div>
 
       {/* NEON BOARD */}
-      <div className="bg-[#020617] p-4 rounded-[4rem] shadow-[0_30px_80px_rgba(0,0,0,0.6)] relative overflow-hidden border-8 border-[#0f172a] mx-1">
-        <div className="grid grid-cols-4 gap-3 relative z-10">
+      <div className="bg-[#020617] p-5 rounded-[4.5rem] shadow-[0_40px_100px_rgba(0,0,0,0.7)] relative overflow-hidden border-8 border-[#1e293b] mx-2">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(79,70,229,0.1),transparent)] pointer-events-none"></div>
+        <div className="grid grid-cols-4 gap-4 relative z-10">
           {BOARD.map((cell, idx) => {
             const occupiers = gameState.players.filter(p => p.position === idx);
             const ownerId = gameState.ownedAssets[idx];
-            const isTarget = occupiers.some(p => p.id === currentPlayer?.id);
-            const districtStyle = cell.district ? DISTRICT_COLORS[cell.district] : 'bg-slate-900 border-white/5 text-slate-500';
+            const isTarget = occupiers.some(p => p.id === currentUserId);
+            const isTurnOwnerAt = occupiers.some(p => p.id === currentPlayer?.id);
+            const districtStyle = cell.district ? DISTRICT_COLORS[cell.district] : 'bg-[#0f172a] border-white/5 text-slate-600';
 
             return (
-              <button key={cell.id} onClick={() => setSelectedCell(cell)} className={`aspect-square rounded-[1.5rem] flex flex-col items-center justify-center relative transition-all duration-300 border-2 ${isTarget ? 'bg-white border-white scale-110 z-20 shadow-[0_0_40px_rgba(255,255,255,0.5)]' : ownerId ? DISTRICT_COLORS[cell.district || 'tech'] : districtStyle}`}>
-                <i className={`fa-solid ${cell.icon} ${isTarget ? 'text-slate-900' : 'text-inherit'} text-2xl`}></i>
+              <button 
+                key={cell.id} 
+                onClick={() => setSelectedCell(cell)} 
+                className={`aspect-square rounded-[1.8rem] flex flex-col items-center justify-center relative transition-all duration-300 border-2 ${
+                  isTurnOwnerAt ? 'bg-white border-white scale-110 z-20 shadow-[0_0_40px_rgba(255,255,255,0.6)] text-slate-900' : 
+                  ownerId ? DISTRICT_COLORS[cell.district || 'tech'] : districtStyle
+                }`}
+              >
+                <i className={`fa-solid ${cell.icon} text-2xl ${isTurnOwnerAt ? 'text-slate-900' : 'text-inherit'}`}></i>
+                
+                {/* Аватары игроков на клетке */}
                 {occupiers.length > 0 && (
-                  <div className="absolute -top-1 -right-1 flex gap-0.5">
+                  <div className="absolute -top-1 -right-1 flex -space-x-2">
                     {occupiers.map(p => (
-                      <div key={p.id} className="w-3.5 h-3.5 rounded-full border-2 border-slate-900 shadow-lg" style={{ backgroundColor: p.isHost ? '#6366f1' : '#cbd5e1' }}></div>
+                      <div key={p.id} className="w-4 h-4 rounded-full border-2 border-[#020617] shadow-lg overflow-hidden">
+                        <img src={p.avatar} className="w-full h-full object-cover" />
+                      </div>
                     ))}
                   </div>
                 )}
-                {ownerId && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-current shadow-[0_0_10px_currentColor] animate-pulse"></div>}
+                
+                {ownerId && (
+                  <div className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-current shadow-[0_0_10px_currentColor] animate-pulse"></div>
+                )}
               </button>
             );
           })}
         </div>
 
         {/* CONTROLS */}
-        <div className="mt-8 p-6 bg-white/5 rounded-[2.5rem] border border-white/10 backdrop-blur-3xl flex flex-col items-center gap-4">
-           <div className={`text-[10px] font-black uppercase tracking-[0.3em] italic ${isMyTurn ? 'text-indigo-400 animate-pulse' : 'text-slate-600'}`}>
-             {isMyTurn ? 'ТВОЙ ХОД!' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}
+        <div className="mt-10 p-8 bg-white/5 rounded-[3rem] border border-white/10 backdrop-blur-3xl flex flex-col items-center gap-5">
+           <div className={`text-[11px] font-black uppercase tracking-[0.4em] italic transition-all ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>
+             {isMyTurn ? 'ТВОЙ ВЫХОД!' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}
            </div>
-           <button disabled={!isMyTurn || !!gameState.lastRoll} onClick={() => rollDice(BOARD)} className="w-full py-6 bg-white text-slate-950 rounded-[2rem] font-black text-xs uppercase tracking-[0.4em] shadow-xl active:scale-95 transition-all disabled:opacity-10 flex items-center justify-center gap-4">
-             <i className="fa-solid fa-dice text-xl"></i> БРОСОК
+           <button 
+             disabled={!isMyTurn || !!gameState.lastRoll} 
+             onClick={() => rollDice(BOARD)} 
+             className="w-full py-7 bg-white text-slate-950 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.5em] shadow-[0_20px_50px_rgba(255,255,255,0.2)] active:scale-95 transition-all disabled:opacity-5 flex items-center justify-center gap-5"
+           >
+             <i className="fa-solid fa-dice text-2xl"></i> БРОСОК
            </button>
         </div>
       </div>
 
-      {/* CELL MODAL */}
-      {selectedCell && (
-        <div className="fixed inset-0 z-[1500] flex items-end p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in" onClick={() => setSelectedCell(null)}>
-           <div className="w-full p-8 bg-white rounded-[3.5rem] shadow-2xl space-y-6 animate-slide-up" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-start">
-                 <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.8rem] flex items-center justify-center text-2xl shadow-xl"><i className={`fa-solid ${selectedCell.icon}`}></i></div>
-                    <div>
-                       <h4 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter">{selectedCell.title}</h4>
-                       <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mt-1">{selectedCell.district || 'Событие'}</span>
-                    </div>
-                 </div>
-                 <button onClick={() => setSelectedCell(null)} className="w-10 h-10 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button>
-              </div>
-              
-              {selectedCell.type === 'asset' ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                     <div className="p-5 bg-slate-50 rounded-[1.8rem] border border-slate-100">
-                        <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">ЦЕНА</span>
-                        <span className="text-xl font-black italic">{selectedCell.cost?.toLocaleString()} XP</span>
-                     </div>
-                     <div className="p-5 bg-indigo-50 rounded-[1.8rem] border border-indigo-100">
-                        <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1">ДОХОД</span>
-                        <span className="text-xl font-black text-indigo-700 italic">{selectedCell.rent?.toLocaleString()} XP</span>
-                     </div>
-                  </div>
-                  {!gameState.ownedAssets[selectedCell.id] && currentPlayer?.id === currentUserId && currentPlayer.position === selectedCell.id ? (
-                    <button onClick={() => { buyAsset(selectedCell.id, BOARD); setSelectedCell(null); }} className="w-full py-5 bg-slate-900 text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all">ЗАХВАТИТЬ СЕКТОР</button>
-                  ) : (
-                    <div className="p-5 bg-slate-50 rounded-[1.8rem] text-center italic text-[10px] font-bold text-slate-400 uppercase">
-                      {gameState.ownedAssets[selectedCell.id] ? 'СЕКТОР ЗАХВАЧЕН' : 'ВСТАНЬТЕ НА СЕКТОР ДЛЯ ПОКУПКИ'}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-10 bg-slate-50 rounded-[2.5rem] text-center italic text-slate-400 text-xs">Активируется при попадании игрока...</div>
-              )}
-           </div>
-        </div>
-      )}
-
       {/* ARENA LOG */}
-      <div className="px-4 space-y-3 pb-10">
-        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic px-2">Журнал Арены</h3>
-        <div className="space-y-2">
+      <div className="px-5 space-y-4 pb-12">
+        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic px-2">Хроника Племени</h3>
+        <div className="space-y-3">
           {gameState.history.map((log, i) => (
-            <div key={i} className={`p-4 rounded-[1.5rem] border text-[9px] font-bold italic transition-all ${i === 0 ? 'bg-indigo-600 text-white shadow-lg border-indigo-400' : 'bg-white text-slate-400 border-slate-100 opacity-60'}`}>
+            <div key={i} className={`p-5 rounded-[1.8rem] border-2 text-[10px] font-bold italic transition-all ${
+              i === 0 ? 'bg-indigo-600 text-white shadow-xl border-indigo-400 scale-[1.02]' : 
+              log.includes('⚡️') ? 'bg-amber-50 border-amber-200 text-amber-700' :
+              'bg-white text-slate-400 border-slate-100 opacity-70'
+            }`}>
               {log}
             </div>
           ))}
         </div>
       </div>
+
+      {/* CELL MODAL (Enhanced) */}
+      {selectedCell && (
+        <div className="fixed inset-0 z-[1500] flex items-end p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in" onClick={() => setSelectedCell(null)}>
+           <div className="w-full p-10 bg-white rounded-[4rem] shadow-2xl space-y-8 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start">
+                 <div className="flex items-center gap-6">
+                    <div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-3xl shadow-2xl">
+                       <i className={`fa-solid ${selectedCell.icon}`}></i>
+                    </div>
+                    <div>
+                       <h4 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{selectedCell.title}</h4>
+                       <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mt-3 italic">{selectedCell.district || 'Узел событий'}</span>
+                    </div>
+                 </div>
+                 <button onClick={() => setSelectedCell(null)} className="w-12 h-12 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center transition-colors hover:bg-slate-100">
+                    <i className="fa-solid fa-xmark text-xl"></i>
+                 </button>
+              </div>
+              
+              {selectedCell.type === 'asset' ? (
+                <div className="space-y-8">
+                  <div className="grid grid-cols-2 gap-5">
+                     <div className="p-7 bg-slate-50 rounded-[2.5rem] border-2 border-slate-100">
+                        <span className="text-[9px] font-black text-slate-400 uppercase block mb-2 italic tracking-widest">СТОИМОСТЬ</span>
+                        <span className="text-2xl font-black italic">{selectedCell.cost?.toLocaleString()} XP</span>
+                     </div>
+                     <div className="p-7 bg-indigo-50 rounded-[2.5rem] border-2 border-indigo-100">
+                        <span className="text-[9px] font-black text-indigo-400 uppercase block mb-2 italic tracking-widest">ДОХОД</span>
+                        <span className="text-2xl font-black text-indigo-700 italic">{selectedCell.rent?.toLocaleString()} XP</span>
+                     </div>
+                  </div>
+                  
+                  {isMyTurn && currentPlayer?.position === selectedCell.id && !gameState.ownedAssets[selectedCell.id] ? (
+                    <button onClick={() => { buyAsset(selectedCell.id, BOARD); setSelectedCell(null); }} className="w-full py-7 bg-slate-900 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all">
+                       ЗАХВАТИТЬ СЕКТОР
+                    </button>
+                  ) : (
+                    <div className="p-8 bg-slate-50 rounded-[2.5rem] text-center italic text-[11px] font-black text-slate-400 uppercase tracking-widest border-2 border-dashed border-slate-200">
+                      {gameState.ownedAssets[selectedCell.id] ? 'СЕКТОР ПОД КОНТРОЛЕМ' : 'НУЖЕН ТВОЙ ХОД НА ЭТУ КЛЕТКУ'}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-12 bg-slate-50 rounded-[3rem] text-center italic text-slate-400 text-sm border-2 border-dashed border-slate-100">
+                   Узел активностей. Активируется при попадании игрока...
+                </div>
+              )}
+           </div>
+        </div>
+      )}
     </div>
   );
 };
