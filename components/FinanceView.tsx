@@ -5,6 +5,8 @@ import { Transaction, Debt, Subscription, FinancialSnapshot, YearGoal } from '..
 import { GoogleGenAI } from "@google/genai";
 
 const EXPENSE_CATEGORIES = ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Одежда', 'Связь', 'Подписки', 'Налоги', 'Спорт', 'Путешествия', 'Другое'];
+const DEBT_CATEGORIES = ['bank', 'card', 'friend', 'other'];
+const DEBT_LABELS: Record<string, string> = { bank: 'Банк', card: 'Кредитка', friend: 'Друг/Знакомый', other: 'Другое' };
 
 const freedomLevels = [
   { id: 'safety', title: 'Безопасность', target: 600000, desc: '6 месяцев жизни', icon: 'fa-shield-heart', color: 'text-blue-400' },
@@ -62,9 +64,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     amount: '',
     title: '',
     category: EXPENSE_CATEGORIES[0],
+    debtCategory: DEBT_CATEGORIES[0] as any,
     type: 'expense' as 'income' | 'expense',
     debtType: 'i_owe' as 'i_owe' | 'they_owe',
-    period: 'monthly' as 'monthly' | 'yearly'
+    period: 'monthly' as 'monthly' | 'yearly',
+    dueDate: ''
   });
 
   const [plannedIncome, setPlannedIncome] = useState(financials.monthly_income || 170000);
@@ -113,7 +117,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   const handleUpdatePercent = (index: number, val: string) => {
     const newBudget = [...budgetStructure];
-    // Если строка пустая, записываем 0, но в инпуте это позволит стереть цифру
     newBudget[index].percent = val === '' ? 0 : Math.max(0, parseInt(val));
     setBudgetStructure(newBudget);
   };
@@ -143,22 +146,33 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       onAddTransaction(amount, formData.type, formData.category);
     } else if (activeTab === 'debts') {
       onAddDebt({
-        title: formData.title || 'Новый долг',
+        title: formData.title || (formData.debtType === 'i_owe' ? 'Мой долг' : 'Долг мне'),
         total_amount: amount,
         remaining_amount: amount,
         type: formData.debtType,
-        category: 'friend'
+        category: formData.debtCategory,
+        due_date: formData.dueDate || undefined
       });
     } else if (activeTab === 'subscriptions') {
       onAddSubscription({
-        title: formData.title || 'Новая подписка',
+        title: formData.title || 'Подписка',
         amount: amount,
         period: formData.period,
         category: formData.category
       });
     }
     setIsAdding(false);
-    setFormData({ ...formData, amount: '', title: '' });
+    // Reset but keep sensible defaults
+    setFormData({ 
+      amount: '', 
+      title: '', 
+      category: EXPENSE_CATEGORIES[0], 
+      debtCategory: DEBT_CATEGORIES[0],
+      type: 'expense', 
+      debtType: 'i_owe', 
+      period: 'monthly',
+      dueDate: ''
+    });
   };
 
   return (
@@ -198,24 +212,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
              
              <div className="space-y-4">
                 {(activeTab === 'debts' || activeTab === 'subscriptions') && (
-                  <input 
-                    type="text" 
-                    placeholder="Название" 
-                    className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500"
-                    value={formData.title}
-                    onChange={e => setFormData({...formData, title: e.target.value})}
-                  />
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 italic">Название</label>
+                    <input 
+                      type="text" 
+                      placeholder={activeTab === 'debts' ? "Кому или кто должен?" : "Netflix, Spotify и т.д."}
+                      className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500"
+                      value={formData.title}
+                      onChange={e => setFormData({...formData, title: e.target.value})}
+                    />
+                  </div>
                 )}
 
-                <div className="flex gap-2">
-                   <input 
-                    type="number" 
-                    placeholder="Сумма" 
-                    className="flex-1 p-4 bg-slate-50 rounded-2xl font-black text-xl outline-none border-2 border-transparent focus:border-indigo-500"
-                    value={formData.amount}
-                    onChange={e => setFormData({...formData, amount: e.target.value})}
-                   />
-                   <span className="p-4 bg-slate-100 rounded-2xl font-black flex items-center">{financials.currency}</span>
+                <div className="space-y-2">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 italic">Сумма</label>
+                   <div className="flex gap-2">
+                      <input 
+                       type="number" 
+                       placeholder="0" 
+                       className="flex-1 p-4 bg-slate-50 rounded-2xl font-black text-xl outline-none border-2 border-transparent focus:border-indigo-500"
+                       value={formData.amount}
+                       onChange={e => setFormData({...formData, amount: e.target.value})}
+                      />
+                      <span className="p-4 bg-slate-100 rounded-2xl font-black flex items-center">{financials.currency}</span>
+                   </div>
                 </div>
 
                 {activeTab === 'operations' && (
@@ -226,10 +246,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 )}
 
                 {activeTab === 'debts' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => setFormData({...formData, debtType: 'i_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'i_owe' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Я должен</button>
-                    <button onClick={() => setFormData({...formData, debtType: 'they_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'they_owe' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>Мне должны</button>
-                  </div>
+                  <>
+                    <div className="flex gap-2">
+                      <button onClick={() => setFormData({...formData, debtType: 'i_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'i_owe' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Я должен</button>
+                      <button onClick={() => setFormData({...formData, debtType: 'they_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'they_owe' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Мне должны</button>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 italic">Крайний срок</label>
+                      <input 
+                        type="date" 
+                        className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500"
+                        value={formData.dueDate}
+                        onChange={e => setFormData({...formData, dueDate: e.target.value})}
+                      />
+                    </div>
+                  </>
                 )}
 
                 {activeTab === 'subscriptions' && (
@@ -239,17 +270,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 )}
 
-                <select 
-                  className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 appearance-none"
-                  value={formData.category}
-                  onChange={e => setFormData({...formData, category: e.target.value})}
-                >
-                  {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-4 italic">Категория</label>
+                  <select 
+                    className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 appearance-none"
+                    value={activeTab === 'debts' ? formData.debtCategory : formData.category}
+                    onChange={e => activeTab === 'debts' ? setFormData({...formData, debtCategory: e.target.value as any}) : setFormData({...formData, category: e.target.value})}
+                  >
+                    {activeTab === 'debts' ? (
+                      DEBT_CATEGORIES.map(c => <option key={c} value={c}>{DEBT_LABELS[c]}</option>)
+                    ) : (
+                      EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)
+                    )}
+                  </select>
+                </div>
 
                 <button 
                   onClick={submitAdd}
-                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all mt-4"
                 >
                   Сохранить
                 </button>
@@ -479,8 +517,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                {debts.map(d => (
                  <div key={d.id} className={`p-6 bg-white border-l-4 rounded-[2rem] shadow-sm flex justify-between items-center mx-1 ${d.type === 'i_owe' ? 'border-rose-500' : 'border-emerald-500'}`}>
                     <div>
-                       <h4 className="font-black text-slate-800 text-xs uppercase italic">{d.title}</h4>
+                       <div className="flex items-center gap-2">
+                          <h4 className="font-black text-slate-800 text-xs uppercase italic">{d.title}</h4>
+                          <span className="text-[7px] font-black text-slate-300 bg-slate-50 px-1 rounded uppercase">{DEBT_LABELS[d.category]}</span>
+                       </div>
                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">Остаток: {formatVal(d.remaining_amount)}</p>
+                       {d.due_date && <p className="text-[7px] font-black text-indigo-400 uppercase mt-0.5">До {new Date(d.due_date).toLocaleDateString()}</p>}
                     </div>
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${d.type === 'i_owe' ? 'bg-rose-50 text-rose-400' : 'bg-emerald-50 text-emerald-400'}`}><i className={`fa-solid ${d.type === 'i_owe' ? 'fa-triangle-exclamation' : 'fa-hand-holding-dollar'} text-xs`}></i></div>
                  </div>
@@ -507,7 +549,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </div>
                     <div className="text-right">
                        <span className="font-black text-indigo-600 italic block text-sm">{formatVal(s.amount)}</span>
-                       <span className="text-[7px] font-black text-slate-300 uppercase italic">Месяц</span>
+                       <span className="text-[7px] font-black text-slate-300 uppercase italic">{s.period === 'monthly' ? 'Месяц' : 'Год'}</span>
                     </div>
                  </div>
                ))}
