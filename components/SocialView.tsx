@@ -2,15 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameState, BoardCell, GamePlayer } from '../types';
 
-const DISTRICT_INFO: Record<string, { color: string, label: string }> = {
-  tech: { color: 'border-blue-500 bg-blue-500/10', label: 'Технологии' },
-  realestate: { color: 'border-amber-500 bg-amber-500/10', label: 'Недвижимость' },
-  health: { color: 'border-emerald-500 bg-emerald-500/10', label: 'Биотех' },
-  energy: { color: 'border-rose-500 bg-rose-500/10', label: 'Энергия' },
-  web3: { color: 'border-violet-500 bg-violet-500/10', label: 'Web3' },
-  edu: { color: 'border-cyan-500 bg-cyan-500/10', label: 'Образование' }
-};
-
 const BOARD: BoardCell[] = ([
   { id: 0, type: 'start', title: 'Старт', icon: 'fa-rocket' },
   { id: 1, type: 'asset', district: 'tech', title: 'App Studio', cost: 8000, rent: 1200, icon: 'fa-mobile' },
@@ -42,181 +33,154 @@ interface SocialViewProps {
   gameState: GameState;
   rollDice: (board: BoardCell[]) => void;
   buyAsset: (cellId: number, board: BoardCell[]) => void;
-  createDeposit: (amount: number, turns: number) => void;
+  createDeposit: (amount: number) => void;
   sendReaction: (emoji: string) => void;
+  generateInviteLink: () => void;
+  joinFakePlayer: () => void;
+  startGame: () => void;
 }
 
-export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buyAsset, createDeposit, sendReaction }) => {
-  const [isRolling, setIsRolling] = useState(false);
+export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buyAsset, createDeposit, sendReaction, generateInviteLink, joinFakePlayer, startGame }) => {
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
-  const [showBank, setShowBank] = useState(false);
-  const [depositAmount, setDepositAmount] = useState(5000);
-
+  const [tutorialStep, setTutorialStep] = useState(0);
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-  const reactions = ['🔥', '💸', '🤡', '📉', '👏', '🤣'];
 
-  const handleRoll = () => {
-    setIsRolling(true);
-    setTimeout(() => {
-      rollDice(BOARD);
-      setIsRolling(false);
-    }, 1000);
-  };
+  if (gameState.status === 'lobby') {
+    return (
+      <div className="flex flex-col h-full animate-fade-in space-y-8 p-4">
+        <div className="text-center space-y-2">
+          <h2 className="text-4xl font-black italic uppercase tracking-tighter">Лобби Племени</h2>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ждем твоих союзников</p>
+        </div>
+
+        <div className="flex-1 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {gameState.players.map(p => (
+              <div key={p.id} className="p-4 bg-white border border-slate-100 rounded-3xl flex flex-col items-center gap-3 shadow-sm animate-scale-up">
+                 <div className="w-16 h-16 rounded-2xl bg-slate-100 overflow-hidden">
+                    <img src={p.avatar} className="w-full h-full object-cover" />
+                 </div>
+                 <span className="font-black italic uppercase text-[10px]">{p.name}</span>
+                 {p.isHost && <span className="text-[7px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full">HOST</span>}
+              </div>
+            ))}
+            {Array.from({ length: Math.max(0, 4 - gameState.players.length) }).map((_, i) => (
+              <div key={i} className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-2 opacity-40">
+                 <i className="fa-solid fa-user-plus text-slate-300"></i>
+                 <span className="text-[7px] font-black uppercase tracking-widest">Слот свободен</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 pb-8">
+           <button onClick={generateInviteLink} className="w-full py-5 bg-white border-2 border-indigo-600 text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all">
+             <i className="fa-solid fa-link"></i> Позвать в Племя
+           </button>
+           <button onClick={joinFakePlayer} className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-black text-[9px] uppercase tracking-widest">Добавить бота для теста</button>
+           <button 
+             disabled={gameState.players.length < 2}
+             onClick={startGame}
+             className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all disabled:opacity-20"
+           >
+             Начать Игру
+           </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-24">
+    <div className="space-y-6 animate-fade-in pb-24 relative">
+      {/* Tutorial Overlay */}
+      {tutorialStep < 3 && (
+        <div className="fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-8 animate-fade-in">
+           <div className="bg-white rounded-[3rem] p-10 space-y-6 max-w-sm w-full text-center shadow-2xl border-4 border-indigo-500">
+              <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-lg">
+                <i className={`fa-solid ${tutorialStep === 0 ? 'fa-graduation-cap' : tutorialStep === 1 ? 'fa-building-columns' : 'fa-hand-holding-dollar'}`}></i>
+              </div>
+              <h3 className="text-2xl font-black italic uppercase">{tutorialStep === 0 ? 'Добро пожаловать!' : tutorialStep === 1 ? 'Активы и Рента' : 'Победа'}</h3>
+              <p className="text-xs font-bold text-slate-500 leading-relaxed italic">
+                {tutorialStep === 0 && 'Арена - это место, где твой XP превращается в Капитал. Бросай кубик и захватывай сектора.'}
+                {tutorialStep === 1 && 'Когда другие игроки наступают на твою клетку, они платят тебе аренду. Накопи больше всех XP.'}
+                {tutorialStep === 2 && 'Игра закончится, когда все кроме одного обанкротятся или раунды достигнут финала.'}
+              </p>
+              <button onClick={() => setTutorialStep(tutorialStep + 1)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px]">Понятно</button>
+           </div>
+        </div>
+      )}
+
+      {/* Dice Overlay */}
+      {gameState.lastRoll && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
+           <div className="w-32 h-32 bg-white rounded-[2.5rem] shadow-[0_0_50px_rgba(255,255,255,0.5)] border-4 border-indigo-600 flex items-center justify-center text-6xl font-black italic text-indigo-600 animate-bounce animate-scale-up">
+              {gameState.lastRoll}
+           </div>
+        </div>
+      )}
+
       <header className="px-2 flex justify-between items-end">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Арена</h2>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Покорение Капитала</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Раунд {gameState.turnNumber}</p>
         </div>
-        <button 
-          onClick={() => setShowBank(!showBank)}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-all ${showBank ? 'bg-slate-900 text-white' : 'bg-amber-500 text-white'}`}
-        >
-          <i className="fa-solid fa-building-columns"></i>
-        </button>
       </header>
 
-      {/* Реакции Племени */}
-      <div className="flex justify-around bg-white p-3 rounded-2xl border border-slate-100 shadow-sm mx-1">
-        {reactions.map(emoji => (
-          <button 
-            key={emoji} 
-            onClick={() => sendReaction(emoji)}
-            className="text-xl hover:scale-125 transition-transform active:scale-90"
-          >
-            {emoji}
-          </button>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 px-1">
+        {gameState.players.map((p, idx) => (
+          <div key={p.id} className={`flex-shrink-0 p-3 rounded-2xl border-2 transition-all ${gameState.currentPlayerIndex === idx ? 'bg-indigo-600 border-white text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
+            <div className="flex items-center gap-2">
+              <img src={p.avatar} className="w-8 h-8 rounded-lg object-cover" />
+              <span className="text-[9px] font-black uppercase italic">{p.name}</span>
+            </div>
+            <div className="mt-1 text-xs font-black">{Math.round(p.cash).toLocaleString()} XP</div>
+          </div>
         ))}
       </div>
 
-      {/* Поле и игроки */}
-      <div className="relative">
-        {/* Всплывающие реакции */}
-        <div className="absolute inset-0 pointer-events-none z-[100]">
-          {gameState.reactions.map(r => {
-            const player = gameState.players.find(p => p.id === r.playerId);
+      <div className="bg-slate-950 p-6 rounded-[3rem] shadow-2xl relative overflow-hidden border-4 border-slate-900 mx-1">
+        <div className="grid grid-cols-4 gap-2 relative z-10">
+          {BOARD.map((cell, idx) => {
+            const occupyingPlayers = gameState.players.filter(p => p.position === idx);
+            const ownerId = gameState.ownedAssets[idx];
+            const owner = gameState.players.find(p => p.id === ownerId);
+
             return (
-              <div 
-                key={r.timestamp}
-                className="absolute text-2xl animate-bounce-up"
-                style={{ 
-                  left: `${20 + Math.random() * 60}%`, 
-                  top: '40%',
-                  opacity: 0.8
-                }}
+              <button 
+                key={cell.id} 
+                onClick={() => setSelectedCell(cell)}
+                className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all border-2 ${
+                  occupyingPlayers.some(p => p.id === currentPlayer.id) ? 'bg-white border-indigo-400 scale-105 z-20' : 
+                  ownerId ? 'bg-white/10 border-indigo-500' : 'bg-slate-800/40 border-slate-800'
+                }`}
               >
-                {r.emoji}
-              </div>
+                <i className={`fa-solid ${cell.icon} ${ownerId ? 'text-indigo-400' : 'text-slate-600'} text-lg`}></i>
+                {/* No text title here for "Clean" look */}
+                
+                {owner && <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-indigo-500 border border-white"></div>}
+                
+                <div className="absolute -top-1 -right-1 flex gap-0.5">
+                  {occupyingPlayers.map(p => (
+                    <div key={p.id} className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: p.id === gameState.players[0].id ? '#6366f1' : '#cbd5e1' }}></div>
+                  ))}
+                </div>
+              </button>
             );
           })}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 px-1">
-          {gameState.players.map((p, idx) => (
-            <div key={p.id} className={`flex-shrink-0 p-3 rounded-2xl border-2 transition-all ${gameState.currentPlayerIndex === idx ? 'bg-indigo-600 border-white text-white shadow-lg scale-105' : 'bg-white border-slate-100 text-slate-400'}`}>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-200 overflow-hidden relative">
-                   <img src={p.avatar} className="w-full h-full object-cover" />
-                   {p.deposits.length > 0 && (
-                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full border border-white flex items-center justify-center">
-                        <i className="fa-solid fa-vault text-[5px] text-white"></i>
-                     </div>
-                   )}
-                </div>
-                <span className="text-[9px] font-black uppercase tracking-tighter italic">{p.name}</span>
-              </div>
-              <div className="mt-1 text-xs font-black italic">{Math.round(p.cash).toLocaleString()} XP</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-slate-950 p-6 rounded-[3rem] shadow-2xl relative overflow-hidden border-4 border-slate-900 mx-1">
-          <div className="grid grid-cols-4 gap-2 relative z-10">
-            {BOARD.map((cell, idx) => {
-              const occupyingPlayers = gameState.players.filter(p => p.position === idx);
-              const ownerId = gameState.ownedAssets[idx];
-              const owner = gameState.players.find(p => p.id === ownerId);
-              const districtStyle = cell.district ? DISTRICT_INFO[cell.district].color : 'bg-slate-800/40 border-slate-800';
-
-              return (
-                <button 
-                  key={cell.id} 
-                  onClick={() => setSelectedCell(cell)}
-                  className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all border-2 ${
-                    occupyingPlayers.some(p => p.id === currentPlayer.id) ? 'bg-white border-indigo-400 scale-105 z-20' : 
-                    ownerId ? 'bg-white/10 border-indigo-500' : districtStyle
-                  }`}
-                >
-                  <i className={`fa-solid ${cell.icon} ${ownerId ? 'text-indigo-400' : 'text-slate-600'} text-lg mb-1`}></i>
-                  {owner && <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-indigo-500 border border-white"></div>}
-                  
-                  <div className="absolute -top-1 -right-1 flex gap-0.5">
-                    {occupyingPlayers.map(p => (
-                      <div key={p.id} className="w-2.5 h-2.5 rounded-full border border-white shadow-sm" style={{ backgroundColor: p.id === gameState.players[0].id ? '#6366f1' : '#cbd5e1' }}></div>
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-8 bg-white/5 p-6 rounded-3xl border border-white/5 relative z-10 flex flex-col gap-4">
-             <div className="flex justify-between items-end">
-                <div>
-                   <span className="text-[8px] font-black text-slate-500 uppercase block italic mb-1">Ходит: <span className="text-white">{currentPlayer.name}</span></span>
-                   <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Раунд {gameState.turnNumber}</h3>
-                </div>
-                <button 
-                  disabled={isRolling}
-                  onClick={handleRoll}
-                  className="px-10 py-5 bg-white text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
-                >
-                  {isRolling ? '...' : 'Бросок'}
-                </button>
-             </div>
-          </div>
+        <div className="mt-8 bg-white/5 p-6 rounded-3xl border border-white/5 flex flex-col items-center gap-4">
+           <span className="text-[9px] font-black text-slate-500 uppercase italic">Ход: <span className="text-white">{currentPlayer.name}</span></span>
+           <button 
+             disabled={!!gameState.lastRoll}
+             onClick={() => rollDice(BOARD)}
+             className="w-full py-5 bg-white text-slate-900 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-50"
+           >
+             Бросок
+           </button>
         </div>
       </div>
 
-      {/* Панель Банка */}
-      {showBank && (
-        <div className="p-8 bg-white border-2 border-amber-100 rounded-[2.5rem] shadow-xl animate-scale-up space-y-6 mx-1">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xl font-black text-slate-900 italic uppercase">Банк Племени</h3>
-            <button onClick={() => setShowBank(false)} className="text-slate-300"><i className="fa-solid fa-xmark"></i></button>
-          </div>
-          <div className="space-y-4">
-            <div className="p-4 bg-amber-50 rounded-2xl">
-               <span className="text-[8px] font-black text-amber-600 uppercase block mb-1">Ваши вклады:</span>
-               {currentPlayer.deposits.length === 0 ? (
-                 <p className="text-[10px] text-amber-400 italic">Нет активных вкладов</p>
-               ) : currentPlayer.deposits.map(d => (
-                 <div key={d.id} className="flex justify-between text-xs font-bold text-amber-900">
-                    <span>{d.amount} XP</span>
-                    <span>через {d.remainingTurns} х.</span>
-                 </div>
-               ))}
-            </div>
-            <div className="space-y-2">
-               <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Сумма вклада</label>
-               <input 
-                 type="number" 
-                 value={depositAmount} 
-                 onChange={e => setDepositAmount(Number(e.target.value))}
-                 className="w-full p-4 bg-slate-50 rounded-2xl font-black text-lg outline-none border-2 border-transparent focus:border-amber-500"
-               />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-               <button onClick={() => createDeposit(depositAmount, 5)} className="py-4 bg-amber-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">+15% (5х)</button>
-               <button onClick={() => createDeposit(depositAmount, 10)} className="py-4 bg-amber-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest">+40% (10х)</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Информация о клетке */}
       {selectedCell && (
         <div className="p-6 bg-white border border-slate-100 rounded-[2.5rem] shadow-xl animate-scale-up space-y-4 mx-1">
           <div className="flex justify-between items-start">
@@ -224,7 +188,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
                 <div className="w-14 h-14 bg-slate-950 text-white rounded-2xl flex items-center justify-center text-xl"><i className={`fa-solid ${selectedCell.icon}`}></i></div>
                 <div>
                    <h4 className="text-lg font-black text-slate-900 italic uppercase leading-none">{selectedCell.title}</h4>
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 block italic">{selectedCell.district ? DISTRICT_INFO[selectedCell.district].label : 'Спецсектор'}</span>
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 block italic">{selectedCell.district || 'Спецсектор'}</span>
                 </div>
              </div>
              <button onClick={() => setSelectedCell(null)} className="text-slate-300"><i className="fa-solid fa-xmark"></i></button>
@@ -233,19 +197,19 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
           {selectedCell.type === 'asset' && (
             <>
               <div className="grid grid-cols-2 gap-4">
-                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                 <div className="p-4 bg-slate-50 rounded-2xl">
                     <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Стоимость</span>
-                    <span className="text-lg font-black text-slate-900">{selectedCell.cost?.toLocaleString()}</span>
+                    <span className="text-lg font-black">{selectedCell.cost?.toLocaleString()}</span>
                  </div>
-                 <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                 <div className="p-4 bg-indigo-50 rounded-2xl">
                     <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1">Аренда</span>
                     <span className="text-lg font-black text-indigo-700">{selectedCell.rent?.toLocaleString()}</span>
                  </div>
               </div>
-              {!gameState.ownedAssets[selectedCell.id] && currentPlayer.position === selectedCell.id && (
+              {!gameState.ownedAssets[selectedCell.id] && gameState.players.find(p => p.position === selectedCell.id) && (
                 <button 
                   onClick={() => { buyAsset(selectedCell.id, BOARD); setSelectedCell(null); }}
-                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg"
+                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest"
                 >
                   Захватить за {selectedCell.cost} XP
                 </button>
@@ -255,10 +219,9 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
         </div>
       )}
 
-      {/* История */}
-      <div className="space-y-3 px-2">
+      <div className="px-2 space-y-3">
         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Лог Капитала</h3>
-        <div className="max-h-40 overflow-y-auto space-y-2 no-scrollbar">
+        <div className="space-y-2">
           {gameState.history.map((log, i) => (
             <div key={i} className={`p-3 rounded-2xl border italic text-[9px] font-bold ${i === 0 ? 'bg-white border-indigo-100 text-indigo-900' : 'bg-slate-50/50 text-slate-400'}`}>
               {log}

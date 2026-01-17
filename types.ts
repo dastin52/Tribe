@@ -1,69 +1,6 @@
 
 export type GoalCategory = "finance" | "sport" | "growth" | "work" | "other";
-
 export type PartnerRole = 'accomplice' | 'guardian' | 'sensei' | 'teammate' | 'navigator' | 'roaster';
-
-// Added missing Value interface
-export interface Value {
-  id: string;
-  title: string;
-  description: string;
-  priority: number;
-}
-
-// Added missing TaskFrequency type
-export type TaskFrequency = "once" | "daily" | "weekly" | "biweekly" | "monthly" | "quarterly";
-
-// Added missing Meeting interface
-export interface Meeting {
-  id: string;
-  title: string;
-  time: string;
-  category: string;
-}
-
-// Added missing Debt interface
-export interface Debt {
-  id: string;
-  title: string;
-  total_amount: number;
-  remaining_amount: number;
-  type: 'i_owe' | 'they_owe';
-  category: string;
-  due_date?: string;
-}
-
-// Added missing Subscription interface
-export interface Subscription {
-  id: string;
-  title: string;
-  amount: number;
-  period: 'monthly' | 'yearly';
-  category: string;
-}
-
-// Added missing FinancialSnapshot interface
-export interface FinancialSnapshot {
-  total_assets: number;
-  total_debts: number;
-  monthly_income: number;
-  monthly_expenses: number;
-  currency: string;
-}
-
-// Added missing ProgressLog interface
-export interface ProgressLog {
-  id: string;
-  goal_id: string;
-  timestamp: string;
-  value: number;
-  confidence: number;
-  is_verified: boolean;
-  verified_by?: string;
-  comment?: string;
-  rating?: number;
-  user_id: string;
-}
 
 export interface GameDeposit {
   id: string;
@@ -86,7 +23,8 @@ export interface GamePlayer {
   cash: number;
   isBankrupt: boolean;
   deposits: GameDeposit[];
-  ownedAssets: number[]; // cell indices
+  ownedAssets: number[]; 
+  isHost?: boolean;
 }
 
 export interface GameState {
@@ -94,62 +32,103 @@ export interface GameState {
   currentPlayerIndex: number;
   history: string[];
   turnNumber: number;
-  ownedAssets: Record<number, string>; // cellId -> ownerPlayerId
+  ownedAssets: Record<number, string>;
   reactions: GameReaction[];
+  lobbyId: string | null;
+  status: 'lobby' | 'playing' | 'finished';
+  lastRoll: number | null;
 }
 
-// Updated User to use FinancialSnapshot interface
 export interface User {
   id: string;
   name: string;
   photo_url?: string;
   xp: number;
   level: number;
-  streak: number;
-  last_active: string;
-  financials?: FinancialSnapshot;
+  streak?: number;
+  last_active?: string;
+  financials?: {
+    total_assets: number;
+    total_debts: number;
+    monthly_income: number;
+    monthly_expenses: number;
+    currency: string;
+  };
   energy_profile: {
     peak_hours: number[];
-    low_energy_hours: number[];
+    low_energy_hours?: number[];
   };
 }
 
-// Updated YearGoal to use ProgressLog and included image_url
+export enum AppView {
+  LANDING = 'landing',
+  DASHBOARD = 'dashboard',
+  SOCIAL = 'social',
+  FINANCE = 'finance',
+  GOALS = 'goals',
+  ANALYTICS = 'analytics',
+  SETTINGS = 'settings'
+}
+
+export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison';
+export interface BoardCell {
+  id: number;
+  type: CellType;
+  district?: string;
+  title: string;
+  cost?: number;
+  rent?: number;
+  icon: string;
+}
+
+export interface ProgressLog {
+  id: string;
+  goal_id: string;
+  timestamp: string;
+  value: number;
+  confidence: number;
+  is_verified: boolean;
+  verified_by?: string;
+  comment?: string;
+  rating?: number;
+  user_id: string;
+}
+
 export interface YearGoal {
   id: string;
   category: GoalCategory;
-  value_id: string;
+  value_id?: string;
   title: string;
   description?: string;
   metric: string;
   target_value: number;
   current_value: number;
-  start_date: string;
-  end_date: string;
-  status: "planned" | "active" | "paused" | "completed" | "abandoned";
-  confidence_level: number;
-  difficulty: number;
-  logs: ProgressLog[];
+  start_date?: string;
+  end_date?: string;
+  status: "active" | "completed";
+  confidence_level?: number;
+  difficulty?: number;
   is_shared?: boolean;
   image_url?: string;
+  logs: ProgressLog[];
 }
 
-// Updated SubGoal to use TaskFrequency type
+export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+
 export interface SubGoal {
   id: string;
   year_goal_id: string;
   title: string;
-  metric: string;
   target_value: number;
   current_value: number;
-  weight: number;
+  metric: string;
   deadline: string;
-  frequency: TaskFrequency;
-  difficulty: number;
+  weight?: number;
+  frequency?: TaskFrequency;
+  difficulty?: number;
   is_completed?: boolean;
 }
 
-// Added note property to Transaction
 export interface Transaction {
   id: string;
   amount: number;
@@ -167,26 +146,36 @@ export interface AccountabilityPartner {
   xp?: number;
 }
 
-export enum AppView {
-  LANDING = 'landing',
-  DASHBOARD = 'dashboard',
-  VALUES = 'values',
-  GOALS = 'goals',
-  ANALYTICS = 'analytics',
-  SETTINGS = 'settings',
-  SOCIAL = 'social',
-  FINANCE = 'finance'
-}
-
-export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison';
-export type AssetDistrict = 'tech' | 'realestate' | 'energy' | 'web3' | 'health' | 'edu';
-
-export interface BoardCell {
-  id: number;
-  type: CellType;
-  district?: AssetDistrict;
+export interface Value {
+  id: string;
   title: string;
-  cost?: number;
-  rent?: number;
-  icon: string;
+  description: string;
+  priority: number;
 }
+
+export interface Meeting {
+  id: string;
+  title: string;
+  time: string;
+  category: GoalCategory;
+}
+
+export interface Debt {
+  id: string;
+  title: string;
+  total_amount: number;
+  remaining_amount: number;
+  type: 'i_owe' | 'they_owe';
+  category: 'bank' | 'card' | 'friend' | 'other';
+  due_date?: string;
+}
+
+export interface Subscription {
+  id: string;
+  title: string;
+  amount: number;
+  period: 'monthly' | 'yearly';
+  category: string;
+}
+
+export type FinancialSnapshot = Required<NonNullable<User['financials']>>;

@@ -94,6 +94,9 @@ const App: React.FC = () => {
           buyAsset={store.buyAsset}
           createDeposit={store.createDeposit}
           sendReaction={store.sendReaction}
+          generateInviteLink={store.generateInviteLink}
+          joinFakePlayer={store.joinFakePlayer}
+          startGame={store.startGame}
         />
       )}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
