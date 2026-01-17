@@ -119,24 +119,20 @@ export function useStore() {
       } catch (e) {
         console.error("Polling error", e);
       }
-    }, 3000); // 3 секунды для более быстрой реакции
+    }, 3000); 
 
     return () => clearInterval(interval);
   }, [gameState.lobbyId]);
 
   const generateInviteLink = () => {
-    // ВАЖНО: Убедитесь, что этот username совпадает с вашим ботом
-    const botUsername = "Serzh_Tribe_bot"; 
+    // ТЕПЕРЬ ТУТ ВАШ БОТ:
+    const botUsername = "tribe_goals_bot"; 
     const link = `https://t.me/${botUsername}/app?startapp=${gameState.lobbyId}`;
     
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.openTelegramLink(
         `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Вступай в моё Племя! Построим капитал вместе 🚀")}`
       );
-    } else {
-      // Для тестов в браузере
-      console.log("Invite link:", link);
-      alert("Ссылка скопирована (консоль)");
     }
   };
 
