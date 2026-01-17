@@ -2,13 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid } from 'recharts';
 import { Transaction, Debt, Subscription, FinancialSnapshot, YearGoal } from '../types';
-import { geminiService } from '../services/gemini';
-// Fix: Import GoogleGenAI from @google/genai
 import { GoogleGenAI } from "@google/genai";
 
-const EXPENSE_CATEGORIES = ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Одежда', 'Связь', 'Подписки', 'Налоги', 'Другое'];
+const EXPENSE_CATEGORIES = ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Одежда', 'Связь', 'Подписки', 'Налоги', 'Спорт', 'Путешествия', 'Другое'];
 
-// Fix: Defined missing freedomLevels constant for the planning view
 const freedomLevels = [
   { id: 'safety', title: 'Безопасность', target: 600000, desc: '6 месяцев жизни', icon: 'fa-shield-heart', color: 'text-blue-400' },
   { id: 'stability', title: 'Стабильность', target: 5000000, desc: 'Закрытые базы', icon: 'fa-building-columns', color: 'text-indigo-400' },
@@ -23,6 +20,21 @@ interface BudgetCategory {
   realCategory?: string;
 }
 
+interface FinanceViewProps {
+  financials: FinancialSnapshot;
+  transactions: Transaction[];
+  debts: Debt[];
+  subscriptions: Subscription[];
+  balanceVisible: boolean;
+  setBalanceVisible: (v: boolean) => void;
+  netWorth: number;
+  balanceHistory: any[];
+  onAddTransaction: (amount: number, type: 'income' | 'expense', category: string, note?: string) => void;
+  onAddDebt: (debt: Omit<Debt, 'id'>) => void;
+  onAddSubscription: (sub: Omit<Subscription, 'id'>) => void;
+  goals: YearGoal[];
+}
+
 export const FinanceView: React.FC<FinanceViewProps> = ({ 
   financials, transactions, debts, subscriptions, balanceVisible, setBalanceVisible, netWorth, balanceHistory, onAddTransaction, onAddDebt, onAddSubscription, goals 
 }) => {
@@ -32,18 +44,33 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [aiBudgetAdvice, setAiBudgetAdvice] = useState<string | null>(null);
   const [loadingAdvice, setLoadingAdvice] = useState(false);
 
+  // Состояния для форм добавления
+  const [formData, setFormData] = useState({
+    amount: '',
+    title: '',
+    category: EXPENSE_CATEGORIES[0],
+    type: 'expense' as 'income' | 'expense',
+    debtType: 'i_owe' as 'i_owe' | 'they_owe',
+    period: 'monthly' as 'monthly' | 'yearly'
+  });
+
   // Состояние планировщика
   const [plannedIncome, setPlannedIncome] = useState(financials.monthly_income || 170000);
   const [budgetStructure, setBudgetStructure] = useState<BudgetCategory[]>([
     { name: 'Аренда/Ипотека', percent: 25, group: 'essential', realCategory: 'Жилье' },
     { name: 'Продукты', percent: 10, group: 'essential', realCategory: 'Продукты' },
     { name: 'Транспорт', percent: 3, group: 'essential', realCategory: 'Транспорт' },
+    { name: 'Спорт', percent: 5, group: 'essential', realCategory: 'Спорт' }, 
     { name: 'Связь/Подписки', percent: 2, group: 'essential', realCategory: 'Связь' },
-    { name: 'Покупки', percent: 15, group: 'dreams', realCategory: 'Одежда' },
-    { name: 'Развлечения', percent: 15, group: 'dreams', realCategory: 'Развлечения' },
-    { name: 'Подушка', percent: 20, group: 'invest' },
+    { name: 'Путешествия', percent: 10, group: 'dreams', realCategory: 'Путешествия' }, 
+    { name: 'Покупки', percent: 5, group: 'dreams', realCategory: 'Одежда' },
+    { name: 'Развлечения', percent: 10, group: 'dreams', realCategory: 'Развлечения' },
+    { name: 'Подушка', percent: 10, group: 'invest' },
     { name: 'Фондовый рынок', percent: 10, group: 'invest' },
   ]);
+
+  const totalPlannedPercent = useMemo(() => budgetStructure.reduce((sum, item) => sum + item.percent, 0), [budgetStructure]);
+  const possibleRemaining = useMemo(() => plannedIncome * (1 - totalPlannedPercent / 100), [plannedIncome, totalPlannedPercent]);
 
   const iOweTotal = useMemo(() => debts.filter(d => d.type === 'i_owe').reduce((acc, d) => acc + d.remaining_amount, 0), [debts]);
   const theyOweTotal = useMemo(() => debts.filter(d => d.type === 'they_owe').reduce((acc, d) => acc + d.remaining_amount, 0), [debts]);
@@ -58,7 +85,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       return d.getMonth() === curMonth && d.getFullYear() === curYear;
     });
     
-    // Группировка трат по категориям для планировщика
     const categoryTotals: Record<string, number> = {};
     filtered.forEach(t => {
       if (t.type === 'expense') {
@@ -79,7 +105,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     setBudgetStructure(newBudget);
   };
 
-  // Fix: Fixed GoogleGenAI initialization and text property access following @google/genai guidelines
   const handleOptimizeBudget = async () => {
     setLoadingAdvice(true);
     try {
@@ -90,12 +115,37 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
         contents: `Проанализируй бюджет: Доход ${plannedIncome}. Структура: ${budgetContext}. 
         Найди перерасходы и скажи кратко (до 30 слов), как перенаправить деньги в Инвестиции, чтобы быстрее достичь целей.`,
       });
-      // Fix: Access .text property directly (not a method)
       setAiBudgetAdvice(response.text);
     } catch (e) {
       setAiBudgetAdvice("Попробуйте сократить необязательные покупки и направить 5% дохода в подушку безопасности.");
     }
     setLoadingAdvice(false);
+  };
+
+  const submitAdd = () => {
+    const amount = parseFloat(formData.amount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    if (activeTab === 'operations') {
+      onAddTransaction(amount, formData.type, formData.category);
+    } else if (activeTab === 'debts') {
+      onAddDebt({
+        title: formData.title || 'Новый долг',
+        total_amount: amount,
+        remaining_amount: amount,
+        type: formData.debtType,
+        category: 'friend'
+      });
+    } else if (activeTab === 'subscriptions') {
+      onAddSubscription({
+        title: formData.title || 'Новая подписка',
+        amount: amount,
+        period: formData.period,
+        category: formData.category
+      });
+    }
+    setIsAdding(false);
+    setFormData({ ...formData, amount: '', title: '' });
   };
 
   return (
@@ -107,7 +157,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
          </div>
          <div className="flex gap-2">
             <button onClick={() => setBalanceVisible(!balanceVisible)} className={`w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center shadow-sm transition-colors ${balanceVisible ? 'text-indigo-600' : 'text-slate-300'}`}><i className={`fa-solid ${balanceVisible ? 'fa-eye' : 'fa-eye-slash'}`}></i></button>
-            {activeTab !== 'planning' && <button onClick={() => setIsAdding(!isAdding)} className={`w-12 h-12 rounded-2xl shadow-lg flex items-center justify-center transition-all ${isAdding ? 'bg-slate-900 text-white' : 'bg-indigo-600 text-white'}`}><i className={`fa-solid ${isAdding ? 'fa-xmark' : 'fa-plus'} text-lg`}></i></button>}
+            {activeTab !== 'planning' && (
+              <button 
+                onClick={() => setIsAdding(!isAdding)} 
+                className={`w-12 h-12 rounded-2xl shadow-lg flex items-center justify-center transition-all ${isAdding ? 'bg-slate-900 text-white rotate-45' : 'bg-indigo-600 text-white'}`}
+              >
+                <i className="fa-solid fa-plus text-lg"></i>
+              </button>
+            )}
          </div>
       </header>
 
@@ -120,9 +177,75 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       </div>
 
       <div className="px-1 space-y-6">
+        {isAdding && (
+          <div className="mx-1 p-8 bg-white border-2 border-indigo-100 rounded-[2.5rem] shadow-xl animate-scale-up space-y-6">
+             <h3 className="text-xl font-black text-slate-900 italic uppercase">
+               {activeTab === 'operations' ? 'Новая операция' : activeTab === 'debts' ? 'Добавить долг' : 'Новая подписка'}
+             </h3>
+             
+             <div className="space-y-4">
+                {(activeTab === 'debts' || activeTab === 'subscriptions') && (
+                  <input 
+                    type="text" 
+                    placeholder="Название" 
+                    className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500"
+                    value={formData.title}
+                    onChange={e => setFormData({...formData, title: e.target.value})}
+                  />
+                )}
+
+                <div className="flex gap-2">
+                   <input 
+                    type="number" 
+                    placeholder="Сумма" 
+                    className="flex-1 p-4 bg-slate-50 rounded-2xl font-black text-xl outline-none border-2 border-transparent focus:border-indigo-500"
+                    value={formData.amount}
+                    onChange={e => setFormData({...formData, amount: e.target.value})}
+                   />
+                   <span className="p-4 bg-slate-100 rounded-2xl font-black flex items-center">{financials.currency}</span>
+                </div>
+
+                {activeTab === 'operations' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => setFormData({...formData, type: 'expense'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.type === 'expense' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Расход</button>
+                    <button onClick={() => setFormData({...formData, type: 'income'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.type === 'income' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Доход</button>
+                  </div>
+                )}
+
+                {activeTab === 'debts' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => setFormData({...formData, debtType: 'i_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'i_owe' ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Я должен</button>
+                    <button onClick={() => setFormData({...formData, debtType: 'they_owe'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.debtType === 'they_owe' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>Мне должны</button>
+                  </div>
+                )}
+
+                {activeTab === 'subscriptions' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => setFormData({...formData, period: 'monthly'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.period === 'monthly' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>В месяц</button>
+                    <button onClick={() => setFormData({...formData, period: 'yearly'})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${formData.period === 'yearly' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>В год</button>
+                  </div>
+                )}
+
+                <select 
+                  className="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-indigo-500 appearance-none"
+                  value={formData.category}
+                  onChange={e => setFormData({...formData, category: e.target.value})}
+                >
+                  {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+
+                <button 
+                  onClick={submitAdd}
+                  className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                >
+                  Сохранить
+                </button>
+             </div>
+          </div>
+        )}
+
         {activeTab === 'operations' && (
           <div className="space-y-6 animate-fade-in">
-            {/* Карточка баланса */}
             <div className="bg-[#0f172a] rounded-[3.5rem] p-10 text-white shadow-2xl relative overflow-hidden mx-1">
                <div className="absolute top-10 right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Общий капитал</span>
@@ -138,7 +261,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                </div>
             </div>
 
-            {/* ПЛАНИРОВЩИК БЮДЖЕТА (Раскрывающийся) */}
             <div className="mx-1 overflow-hidden border border-slate-100 rounded-[2.5rem] bg-white shadow-sm transition-all">
               <button 
                 onClick={() => setShowPlanner(!showPlanner)}
@@ -169,18 +291,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         />
                      </div>
                      <div className="text-right">
-                        <span className="text-[8px] font-black text-indigo-400 uppercase block mb-1">Распределено</span>
-                        <span className="text-xl font-black text-indigo-900 italic">
-                          {budgetStructure.reduce((acc, b) => acc + b.percent, 0)}%
-                        </span>
+                        <span className="text-[8px] font-black text-slate-400 uppercase block mb-1 italic">Остаток от плана</span>
+                        <span className={`text-xl font-black italic ${possibleRemaining < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>{possibleRemaining.toLocaleString()} ₽</span>
                      </div>
                   </div>
 
-                  {/* Группы бюджета */}
                   {(['essential', 'dreams', 'invest'] as const).map(group => (
                     <div key={group} className="space-y-3">
                        <h4 className={`text-[10px] font-black uppercase tracking-widest italic px-2 ${group === 'essential' ? 'text-amber-600' : group === 'dreams' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                         {group === 'essential' ? 'Обязательные расходы' : group === 'dreams' ? 'Желания и мечты' : 'Инвестиции и подушка'}
+                         {group === 'essential' ? 'Обязательные расходы (вкл. Спорт)' : group === 'dreams' ? 'Желания и мечты (вкл. Путешествия)' : 'Инвестиции и подушка'}
                        </h4>
                        <div className={`rounded-[2rem] overflow-hidden border ${group === 'essential' ? 'bg-amber-50/30 border-amber-100' : group === 'dreams' ? 'bg-rose-50/30 border-rose-100' : 'bg-emerald-50/30 border-emerald-100'}`}>
                           {budgetStructure.filter(b => b.group === group).map((item, idx) => {
@@ -219,22 +338,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     </div>
                   ))}
 
-                  {/* Кнопка ИИ Оптимизации */}
                   <div className="pt-2">
-                     <button 
-                       onClick={handleOptimizeBudget}
-                       disabled={loadingAdvice}
-                       className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"
-                     >
+                     <button onClick={handleOptimizeBudget} disabled={loadingAdvice} className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl">
                        {loadingAdvice ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-wand-magic-sparkles text-indigo-400"></i>}
                        Оптимизировать расходы
                      </button>
                      {aiBudgetAdvice && (
-                        <div className="mt-4 p-5 bg-indigo-50 border border-indigo-100 rounded-3xl animate-scale-up relative">
-                           <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-indigo-50 rotate-45 border-l border-t border-indigo-100"></div>
-                           <p className="text-[11px] font-bold text-indigo-800 italic leading-relaxed">
-                             "{aiBudgetAdvice}"
-                           </p>
+                        <div className="mt-4 p-5 bg-indigo-50 border border-indigo-100 rounded-3xl animate-scale-up">
+                           <p className="text-[11px] font-bold text-indigo-800 italic leading-relaxed">"{aiBudgetAdvice}"</p>
                         </div>
                      )}
                   </div>
@@ -273,11 +384,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
         {activeTab === 'planning' && (
            <div className="space-y-8 animate-fade-in">
-              {/* Карта Свободы */}
               <div className="p-10 bg-gradient-to-br from-[#1e1b4b] to-[#312e81] rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden mx-1">
                  <div className="absolute top-10 right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 italic mb-10">Прогресс к Свободе</h4>
-                 
                  <div className="space-y-8">
                     {freedomLevels.map((level) => {
                       const progress = Math.min(100, (netWorth / level.target) * 100);
@@ -304,8 +413,6 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     })}
                  </div>
               </div>
-
-              {/* Расширенная информация по уровням */}
               <div className="bg-white p-8 rounded-[3rem] border border-slate-100 space-y-6 shadow-sm mx-1">
                  <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Твой путь: Уровень «Да пошёл ты!»</h5>
                  <p className="text-[11px] font-medium text-slate-500 italic leading-relaxed">
