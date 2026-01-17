@@ -82,7 +82,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   
   const players = gameState?.players || [];
-  const currentPlayer = players[gameState?.currentPlayerIndex || 0] || null;
+  const currentPlayerIndex = gameState?.currentPlayerIndex ?? 0;
+  const currentPlayer = players.length > 0 ? players[currentPlayerIndex % players.length] : null;
   const isMyTurn = currentPlayer?.id === currentUserId;
   const me = players.find(p => p.id === currentUserId);
 
@@ -102,17 +103,11 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
   const narratorMessage = useMemo(() => (gameState?.history && gameState.history[0]) || "Племя готово к вызову...", [gameState?.history]);
 
-  const handleToggleReady = async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    try { await startGame(); } finally { setTimeout(() => setIsSyncing(false), 1000); }
-  };
-
   if (!gameState || (!players.length && gameState.status === 'playing')) {
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Входим в поток...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Синхронизация с племенем...</p>
       </div>
     );
   }
@@ -125,7 +120,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div className="relative z-10 text-center space-y-4 w-full">
             <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-[0_0_40px_rgba(99,102,241,0.4)] mx-auto border-4 border-white/10 animate-pulse"><i className="fa-solid fa-users-rays text-white"></i></div>
             <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none">ЗАЛ<br/>ОЖИДАНИЯ</h2>
-            <div className="bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/30 flex items-center gap-2 mx-auto w-fit"><span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span></div>
+            <div className="bg-indigo-500/10 px-6 py-2 rounded-full border border-indigo-500/30 flex items-center gap-2 mx-auto w-fit"><span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId || '---'}</span></div>
           </div>
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {players.map(p => <PlayerCard key={p.id} p={p} />)}
@@ -138,13 +133,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
           </div>
           <div className="w-full space-y-4 pt-4 relative z-10">
             <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
-            <button onClick={handleToggleReady} disabled={isSyncing} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${me?.isReady ? 'bg-emerald-500 text-white shadow-emerald-500/40' : 'bg-white text-slate-900 shadow-white/10'}`}>
+            <button onClick={() => { setIsSyncing(true); startGame(); setTimeout(() => setIsSyncing(false), 1000); }} disabled={isSyncing} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 ${me?.isReady ? 'bg-emerald-500 text-white shadow-emerald-500/40' : 'bg-white text-slate-900 shadow-white/10'}`}>
               {isSyncing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : me?.isReady ? <i className="fa-solid fa-clock-rotate-left"></i> : <i className="fa-solid fa-check-double"></i>}
               {isSyncing ? 'СИНХРОНИЗАЦИЯ...' : me?.isReady ? 'ЖДЕМ ОСТАЛЬНЫХ' : 'Я ГОТОВ'}
             </button>
           </div>
           <div className="relative z-10 text-[9px] font-bold text-slate-500 uppercase tracking-widest italic text-center px-4">
-             Нажмите «Готов», чтобы начать (минимум 2 игрока).
+             Для начала нужно минимум 2 игрока и статус «Готов».
           </div>
         </div>
       </div>
