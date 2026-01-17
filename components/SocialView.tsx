@@ -50,10 +50,8 @@ interface SocialViewProps {
 export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame }) => {
   const [selectedCell, setSelectedCell] = useState<BoardCell | null>(null);
   const [showDiceEffect, setShowDiceEffect] = useState(false);
-  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   
-  const host = gameState.players.find(p => p.isHost);
-  const isMeHost = gameState.players[0]?.isHost; // Для демо считаем первого игрока хостом
+  const isMeHost = gameState.players.length > 0 && gameState.players[0].isHost;
 
   useEffect(() => {
     if (gameState.lastRoll) {
@@ -78,7 +76,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping"></div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic">СИНХРОНИЗАЦИЯ...</span>
               </div>
-              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest italic opacity-50">LOBBY ID: {gameState.lobbyId}</p>
+              <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic bg-indigo-500/10 px-3 py-1 rounded-full">LOBBY ID: {gameState.lobbyId}</p>
             </div>
           </div>
 
@@ -86,7 +84,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
             {gameState.players.map(p => (
               <div key={p.id} className={`p-6 bg-white/5 backdrop-blur-xl border rounded-[2.5rem] flex flex-col items-center gap-4 animate-scale-up shadow-xl transition-all ${p.isHost ? 'border-indigo-500/50 shadow-indigo-500/10' : 'border-white/10'}`}>
                 <div className={`w-20 h-20 rounded-[1.8rem] overflow-hidden border-2 ${p.isHost ? 'border-indigo-400 shadow-[0_0_20px_rgba(129,140,248,0.5)]' : 'border-slate-700'}`}>
-                  <img src={p.avatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${p.name}`; }} />
+                  <img src={p.avatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`; }} />
                 </div>
                 <div className="text-center w-full px-2">
                   <span className="font-black italic uppercase text-[11px] text-white block truncate">{p.name}</span>
@@ -115,7 +113,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
                <button 
                 disabled={gameState.players.length < 2}
                 onClick={startGame}
-                className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-10"
+                className="w-full py-6 bg-white text-slate-900 rounded-[2rem] font-black text-sm uppercase tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-20"
               >
                 В БОЙ!
               </button>
@@ -124,15 +122,13 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
                  Ждем команды Вождя...
                </div>
             )}
-
-            <button onClick={joinFakePlayer} className="w-full text-[9px] font-bold text-slate-600 uppercase tracking-widest hover:text-slate-400 transition-colors">
-              Добавить бота (для теста)
-            </button>
           </div>
         </div>
       </div>
     );
   }
+
+  const currentPlayer = gameState.players[gameState.currentPlayerIndex] || gameState.players[0];
 
   return (
     <div className="space-y-6 animate-fade-in pb-24 relative px-1">
@@ -166,7 +162,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
           <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[160px] ${gameState.currentPlayerIndex === idx ? 'bg-indigo-600 border-white text-white shadow-2xl scale-105' : 'bg-white border-slate-100 text-slate-400 opacity-60'}`}>
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-2xl overflow-hidden border-2 ${gameState.currentPlayerIndex === idx ? 'border-white/40 shadow-lg' : 'border-slate-100'}`}>
-                <img src={p.avatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${p.name}`; }} />
+                <img src={p.avatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}`; }} />
               </div>
               <div className="text-left">
                 <span className="text-[11px] font-black uppercase italic block truncate w-20">{p.name}</span>
@@ -187,7 +183,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
             const occupyingPlayers = gameState.players.filter(p => p.position === idx);
             const ownerId = gameState.ownedAssets[idx];
             const owner = gameState.players.find(p => p.id === ownerId);
-            const isTarget = occupyingPlayers.some(p => p.id === currentPlayer.id);
+            const isTarget = occupyingPlayers.some(p => p.id === currentPlayer?.id);
 
             return (
               <button 
@@ -213,7 +209,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ gameState, rollDice, buy
         {/* CONTROLS */}
         <div className="mt-12 p-8 bg-white/5 rounded-[3rem] border border-white/10 backdrop-blur-3xl flex flex-col items-center gap-6 shadow-2xl">
            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] italic">ХОД: <span className="text-white text-[11px]">{currentPlayer.name}</span></span>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] italic">ХОД: <span className="text-white text-[11px]">{currentPlayer?.name}</span></span>
            </div>
            <button 
              disabled={!!gameState.lastRoll}
