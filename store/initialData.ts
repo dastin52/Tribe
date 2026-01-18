@@ -2,10 +2,9 @@
 import { User, YearGoal, SubGoal, AccountabilityPartner, Transaction, Meeting, Value, ProgressLog } from '../types';
 
 const now = new Date();
-const dateAgo = (m: number, d: number = 15) => new Date(now.getFullYear(), now.getMonth() - m, d).toISOString();
 
 export const INITIAL_USER: User = {
-  id: 'user-' + Math.random().toString(36).substring(2, 9),
+  id: 'temp-id',
   name: 'Игрок',
   photo_url: '',
   xp: 0,
@@ -31,11 +30,7 @@ export const INITIAL_VALUES: Value[] = [
 ];
 
 export const SAMPLE_PARTNERS: AccountabilityPartner[] = [];
-
 export const SAMPLE_TRANSACTIONS: Transaction[] = [];
-
 export const SAMPLE_GOALS: YearGoal[] = [];
-
 export const SAMPLE_SUBGOALS: SubGoal[] = [];
-
 export const SAMPLE_MEETINGS: Meeting[] = [];

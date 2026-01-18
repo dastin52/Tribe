@@ -7,12 +7,15 @@ const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
 const BOARD_CELLS_COUNT = 24;
 
 export function useStore() {
+  // Инициализация пользователя с проверкой localStorage СРАЗУ
   const [user, setUser] = useState<User>(() => {
-    const savedId = typeof window !== 'undefined' ? localStorage.getItem('tribe_user_id') : null;
-    const userId = savedId || 'u' + Math.random().toString(36).substring(2, 9);
-    if (typeof window !== 'undefined' && !savedId) localStorage.setItem('tribe_user_id', userId);
-    
-    return { ...INITIAL_USER, id: userId };
+    if (typeof window === 'undefined') return INITIAL_USER;
+    let userId = localStorage.getItem('tribe_user_id');
+    if (!userId) {
+      userId = 'u' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem('tribe_user_id', userId);
+    }
+    return { ...INITIAL_USER, id: userId, name: localStorage.getItem('tribe_user_name') || 'Игрок' };
   });
   
   const [view, setView] = useState<AppView>(AppView.LANDING);
@@ -22,9 +25,9 @@ export function useStore() {
   const [transactions, setTransactions] = useState<Transaction[]>(SAMPLE_TRANSACTIONS);
   
   const [gameState, setGameState] = useState<GameState>(() => {
-    const savedLobby = typeof window !== 'undefined' ? localStorage.getItem('tribe_active_lobby') : null;
-    const lobbyId = savedLobby || Math.random().toString(36).substring(2, 7).toUpperCase();
-    if (typeof window !== 'undefined' && !savedLobby) localStorage.setItem('tribe_active_lobby', lobbyId);
+    if (typeof window === 'undefined') return { players: [], currentPlayerIndex: 0, history: [], turnNumber: 1, ownedAssets: {}, reactions: [], lobbyId: 'DEMO', status: 'lobby', lastRoll: null };
+    const lobbyId = localStorage.getItem('tribe_active_lobby') || Math.random().toString(36).substring(2, 7).toUpperCase();
+    localStorage.setItem('tribe_active_lobby', lobbyId);
     
     return {
       players: [],
@@ -41,8 +44,11 @@ export function useStore() {
 
   const isSyncingRef = useRef(false);
 
-  const syncWithServer = async (payload: any) => {
-    if (!gameState.lobbyId || isSyncingRef.current) return;
+  // Улучшенная функция синхронизации: ручные действия (isManual) игнорируют блокировку
+  const syncWithServer = async (payload: any, isManual = false) => {
+    if (!gameState.lobbyId) return;
+    if (!isManual && isSyncingRef.current) return;
+    
     isSyncingRef.current = true;
     try {
       const res = await fetch(`${API_BASE}/join`, {
@@ -52,30 +58,36 @@ export function useStore() {
       });
       if (res.ok) {
         const data = await res.json();
-        setGameState(prev => ({ ...data, lobbyId: data.lobbyId || prev.lobbyId }));
+        if (data && data.lobbyId) {
+          setGameState(prev => ({ ...data, lastRoll: prev.lastRoll }));
+        }
       }
     } catch (e) {
       console.error("Sync error:", e);
     } finally {
-      setTimeout(() => { isSyncingRef.current = false; }, 800);
+      // Короткая задержка для предотвращения дребезга
+      setTimeout(() => { isSyncingRef.current = false; }, isManual ? 100 : 500);
     }
   };
 
+  // Получение данных из Telegram WebApp
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg && tg.initDataUnsafe?.user) {
       const u = tg.initDataUnsafe.user;
+      const fullName = u.first_name + (u.last_name ? ` ${u.last_name}` : '');
       setUser(prev => ({
         ...prev,
         id: String(u.id),
-        name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
+        name: fullName,
         photo_url: u.photo_url || ""
       }));
       localStorage.setItem('tribe_user_id', String(u.id));
+      localStorage.setItem('tribe_user_name', fullName);
     }
   }, []);
 
-  // Update join info when user data or lobby changes
+  // Авто-вход в лобби при изменении данных или ID лобби
   useEffect(() => {
     if (!gameState.lobbyId || !user.id) return;
     const me: GamePlayer = {
@@ -90,8 +102,9 @@ export function useStore() {
       ownedAssets: [],
     };
     syncWithServer({ player: me });
-  }, [user.id, user.name, user.photo_url, gameState.lobbyId]);
+  }, [user.id, user.name, gameState.lobbyId]);
 
+  // Фоновое обновление (polling) только когда мы во вкладке Социум
   useEffect(() => {
     if (!gameState.lobbyId || view !== AppView.SOCIAL) return;
     const fetchLobby = async () => {
@@ -104,8 +117,7 @@ export function useStore() {
         }
       } catch (e) {}
     };
-    const interval = setInterval(fetchLobby, 5000);
-    fetchLobby();
+    const interval = setInterval(fetchLobby, 4000);
     return () => clearInterval(interval);
   }, [gameState.lobbyId, view]);
 
@@ -126,7 +138,7 @@ export function useStore() {
             turnNumber: prev.turnNumber + 1,
             history: [`🎲 ${cp.name} на ${board[nPos].title}`, ...prev.history].slice(0, 10)
           };
-          syncWithServer({ gameStateUpdate: up });
+          syncWithServer({ gameStateUpdate: up }, true);
           return {...prev, ...up};
         });
       }, 2000);
@@ -141,7 +153,7 @@ export function useStore() {
           ownedAssets: { ...prev.ownedAssets, [cellId]: cp.id },
           history: [`🏠 ${cp.name} купил ${cell.title}`, ...prev.history].slice(0, 10)
         };
-        syncWithServer({ gameStateUpdate: up });
+        syncWithServer({ gameStateUpdate: up }, true);
         return { ...prev, ...up };
       });
     },
@@ -155,20 +167,26 @@ export function useStore() {
         alert("Ссылка скопирована!");
       }
     },
-    resetLobby: () => syncWithServer({ resetLobby: true, player: { id: user.id, name: user.name, avatar: user.photo_url || "", position: 0, cash: 50000, isBankrupt: false, isReady: false, deposits: [], ownedAssets: [] } }),
-    kickPlayer: (pid: string) => syncWithServer({ kickPlayerId: pid }),
+    resetLobby: () => {
+      const me: GamePlayer = { id: user.id, name: user.name, avatar: user.photo_url || "", position: 0, cash: 50000, isBankrupt: false, isReady: false, deposits: [], ownedAssets: [] };
+      syncWithServer({ resetLobby: true, player: me }, true);
+    },
+    kickPlayer: (pid: string) => syncWithServer({ kickPlayerId: pid }, true),
     createNewLobby: () => {
       const newId = Math.random().toString(36).substring(2, 7).toUpperCase();
       localStorage.setItem('tribe_active_lobby', newId);
       setGameState(p => ({ ...p, lobbyId: newId, players: [], status: 'lobby' }));
     },
-    joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }),
+    joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }, true),
     joinLobbyManual: (code: string) => { 
       const c = code.toUpperCase().trim();
       localStorage.setItem('tribe_active_lobby', c);
       setGameState(p => ({ ...p, lobbyId: c, players: [] })); 
     },
-    startGame: () => syncWithServer({ player: { id: user.id, isReady: !gameState.players.find(p=>p.id===user.id)?.isReady } }),
+    startGame: () => {
+      const isReady = !gameState.players.find(p => p.id === user.id)?.isReady;
+      syncWithServer({ player: { id: user.id, isReady } }, true);
+    },
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     addTransaction: (a: number, t: any, c: string) => { setTransactions(p => [...p, { id: crypto.randomUUID(), amount: a, type: t, category: c, timestamp: new Date().toISOString() }]); },
     updateUserInfo: (data: Partial<User>) => { setUser(p => ({ ...p, ...data })); },

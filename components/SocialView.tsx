@@ -83,8 +83,12 @@ const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w
 const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }> = ({ p, isMe, onKick }) => (
   <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-white/10'}`}>
     {!isMe && (
-      <button onClick={onKick} className="absolute top-2 right-2 w-6 h-6 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-500 transition-colors z-20">
-        <i className="fa-solid fa-xmark text-[10px]"></i>
+      <button 
+        onClick={(e) => { e.stopPropagation(); onKick(); }} 
+        className="absolute top-2 right-2 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-20 shadow-lg"
+        title="Удалить игрока"
+      >
+        <i className="fa-solid fa-xmark text-xs"></i>
       </button>
     )}
     <PlayerAvatar p={p} />
@@ -101,7 +105,6 @@ const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }>
 export const SocialView: React.FC<SocialViewProps> = ({ 
   gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, kickPlayer, createNewLobby, currentUserId 
 }) => {
-  const [isSyncing, setIsSyncing] = useState(false);
   const [showInput, setShowInput] = useState(false);
   const [manualCode, setManualCode] = useState('');
   
@@ -130,7 +133,11 @@ export const SocialView: React.FC<SocialViewProps> = ({
               <div className="bg-white/5 px-6 py-2 rounded-full border border-white/10 flex items-center gap-2 w-fit">
                 <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
               </div>
-              <button onClick={() => { if(confirm("Очистить лобби? Все остальные игроки будут удалены.")) resetLobby(); }} className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center active:scale-90 transition-all" title="Очистить лобби">
+              <button 
+                onClick={() => { if(confirm("Очистить лобби и начать поиск заново?")) resetLobby(); }} 
+                className="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all shadow-lg" 
+                title="Очистить лобби"
+              >
                 <i className="fa-solid fa-trash-can text-xs"></i>
               </button>
             </div>
@@ -139,7 +146,10 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
             {players.map(p => <PlayerCard key={p.id} p={p} isMe={p.id === currentUserId} onKick={() => kickPlayer(p.id)} />)}
             {players.length < 4 && (
-              <button onClick={() => { setIsSyncing(true); joinFakePlayer(); setTimeout(() => setIsSyncing(false), 800); }} className="p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 transition-all hover:bg-white/10 text-slate-500">
+              <button 
+                onClick={joinFakePlayer} 
+                className="p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 transition-all hover:bg-white/10 active:scale-95 text-slate-500"
+              >
                 <i className="fa-solid fa-robot text-xl"></i>
                 <span className="text-[8px] font-black uppercase tracking-widest italic">+ БОТ</span>
               </button>
@@ -163,9 +173,12 @@ export const SocialView: React.FC<SocialViewProps> = ({
                </div>
             ) : (
                <>
-                <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
-                <button onClick={() => { setIsSyncing(true); startGame(); setTimeout(() => setIsSyncing(false), 800); }} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 ${me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'}`}>
-                   {me?.isReady ? 'ОЖИДАНИЕ ИГРОКОВ' : 'Я ГОТОВ'}
+                <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
+                <button 
+                  onClick={startGame} 
+                  className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all ${me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'}`}
+                >
+                   {me?.isReady ? 'ОТМЕНИТЬ ГОТОВНОСТЬ' : 'Я ГОТОВ'}
                 </button>
                 <div className="flex gap-4 justify-center">
                   <button onClick={() => setShowInput(true)} className="text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors">Войти по коду</button>
