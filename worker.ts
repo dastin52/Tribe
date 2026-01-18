@@ -1,6 +1,7 @@
 
 /**
  * Cloudflare Worker для Tribe Arena и Племени.
+ * Исправлена логика синхронизации и поддержки одиночного режима.
  */
 
 interface Env {
@@ -18,127 +19,95 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-    if (url.pathname === "/lobby" && request.method === "GET") {
-      const id = url.searchParams.get("id");
-      if (!id) return new Response("No ID", { status: 400 });
-      const data = await env.TRIBE_KV.get(`lobby:${id}`);
-      return new Response(data || JSON.stringify({ lobbyId: id, players: [], status: 'lobby' }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const lobbyId = url.searchParams.get("id") || (request.method === "POST" ? (await request.clone().json()).lobbyId : null);
+    if (!lobbyId) return new Response("Missing Lobby ID", { status: 400, headers: corsHeaders });
+
+    const lobbyKey = `lobby:${lobbyId}`;
+    let data = await env.TRIBE_KV.get(lobbyKey);
+    let state = data ? JSON.parse(data) : { 
+      lobbyId, players: [], pendingPlayers: [], status: 'lobby', 
+      history: ["Инициализация пространства..."], ownedAssets: {}, 
+      currentPlayerIndex: 0, turnNumber: 1 
+    };
+
+    if (request.method === "GET") {
+      return new Response(JSON.stringify(state), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (url.pathname === "/join" && request.method === "POST") {
-      const body = await request.json();
-      const { lobbyId, player, gameStateUpdate, addBot, resetLobby, kickPlayerId, action, targetId } = body;
-      
-      if (!lobbyId) return new Response("No Lobby ID", { status: 400 });
-      
-      const lobbyKey = `lobby:${lobbyId}`;
-      let data = await env.TRIBE_KV.get(lobbyKey);
-      
-      let state = data ? JSON.parse(data) : { 
-        lobbyId: lobbyId,
-        players: [], 
-        pendingPlayers: [],
-        status: 'lobby', 
-        currentPlayerIndex: 0, 
-        history: ["Создано новое пространство..."], 
-        ownedAssets: {},
-        turnNumber: 1,
-        hostId: player?.id
-      };
+    const body = await request.json();
+    const { player, gameStateUpdate, addBot, resetLobby, kickPlayerId, action, targetId } = body;
+    let changed = false;
 
-      let changed = false;
-
-      if (resetLobby) {
-        // Очищаем всех кроме хоста и ботов
-        state.players = state.players.filter((p: any) => p.id === state.hostId || p.isBot);
-        state.status = 'lobby';
-        state.history = ["Лобби обновлено."];
-        changed = true;
-      }
-
-      // 1. Обработка действий (Стук/Одобрение)
-      if (action === 'knock' && player) {
-        const alreadyPending = (state.pendingPlayers || []).some((p: any) => p.id === player.id);
-        const alreadyIn = state.players.some((p: any) => p.id === player.id);
-        if (!alreadyPending && !alreadyIn) {
-          if (!state.pendingPlayers) state.pendingPlayers = [];
-          state.pendingPlayers.push({ ...player, status: 'pending' });
-          state.history.unshift(`🔔 ${player.name} хочет в Племя!`);
-          changed = true;
-        }
-      }
-
-      if (action === 'approve' && targetId) {
-        const idx = state.pendingPlayers.findIndex((p: any) => p.id === targetId);
-        if (idx > -1) {
-          const newPartner = state.pendingPlayers.splice(idx, 1)[0];
-          state.players.push({ ...newPartner, status: 'accepted', position: 0, cash: 50000, isReady: false });
-          state.history.unshift(`✅ ${newPartner.name} принят в Племя!`);
-          changed = true;
-        }
-      }
-
-      // 2. Добавление/Обновление игрока (КРИТИЧЕСКИЙ ФИКС)
-      if (player && player.id && !action) {
-        const idx = state.players.findIndex((p: any) => p.id === player.id);
-        if (idx > -1) {
-          // Обновляем существующего
-          state.players[idx] = { ...state.players[idx], ...player };
-          changed = true;
-        } else {
-          // Добавляем НОВОГО игрока
-          const isFirst = state.players.length === 0;
-          state.players.push({ 
-            ...player, 
-            isHost: isFirst, 
-            position: 0, 
-            cash: 50000, 
-            isReady: player.isReady || false,
-            deposits: [],
-            ownedAssets: []
-          });
-          if (isFirst) state.hostId = player.id;
-          state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
-          changed = true;
-        }
-      }
-
-      if (kickPlayerId) {
-        state.players = state.players.filter((p: any) => p.id !== kickPlayerId);
-        state.history.unshift(`🚫 Участник удален.`);
-        changed = true;
-      }
-
-      if (addBot) {
-        state.players.push({ ...addBot, id: 'bot-' + Date.now(), isReady: true, isBot: true });
-        state.history.unshift(`🤖 Бот ${addBot.name} в деле!`);
-        changed = true;
-      }
-
-      if (gameStateUpdate) {
-        state = { ...state, ...gameStateUpdate };
-        changed = true;
-      }
-
-      // Авто-старт если все готовы (минимум 2)
-      if (state.status === 'lobby') {
-        const readyCount = state.players.filter((p: any) => p.isReady === true).length;
-        if (readyCount >= 2 && state.players.length >= 2) {
-          state.status = 'playing';
-          state.history.unshift("🚀 ИГРА НАЧАЛАСЬ!");
-          changed = true;
-        }
-      }
-
-      if (changed || !data) {
-        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 86400 });
-      }
-      
-      return new Response(JSON.stringify(state), { headers: corsHeaders });
+    // 1. Сброс лобби
+    if (resetLobby) {
+      state.players = state.players.filter((p: any) => p.isHost || p.id === state.hostId);
+      state.status = 'lobby';
+      state.history.unshift("Лобби перезагружено.");
+      changed = true;
     }
 
-    return new Response("Not Found", { status: 404 });
+    // 2. Система партнеров (Knock/Approve)
+    if (action === 'knock' && player) {
+      if (!state.pendingPlayers) state.pendingPlayers = [];
+      if (!state.pendingPlayers.some((p: any) => p.id === player.id) && !state.players.some((p: any) => p.id === player.id)) {
+        state.pendingPlayers.push({ ...player, status: 'pending' });
+        state.history.unshift(`🔔 ${player.name} просит доступа в Племя.`);
+        changed = true;
+      }
+    }
+
+    if (action === 'approve' && targetId) {
+      const idx = state.pendingPlayers?.findIndex((p: any) => p.id === targetId);
+      if (idx > -1) {
+        const p = state.pendingPlayers.splice(idx, 1)[0];
+        state.players.push({ ...p, cash: 50000, position: 0, isReady: false, status: 'accepted' });
+        state.history.unshift(`✅ ${p.name} теперь ваш партнер.`);
+        changed = true;
+      }
+    }
+
+    // 3. Синхронизация игрока (UPSERT)
+    if (player && player.id && !action) {
+      const idx = state.players.findIndex((p: any) => p.id === player.id);
+      if (idx > -1) {
+        state.players[idx] = { ...state.players[idx], ...player };
+      } else {
+        const isFirst = state.players.length === 0;
+        state.players.push({ 
+          ...player, isHost: isFirst, cash: 50000, position: 0, 
+          isReady: player.isReady || false, ownedAssets: [], deposits: [] 
+        });
+        if (isFirst) state.hostId = player.id;
+      }
+      changed = true;
+    }
+
+    // 4. Управление ботами
+    if (addBot) {
+      state.players.push({ ...addBot, id: 'bot-' + Math.random(), isReady: true, isBot: true });
+      changed = true;
+    }
+
+    // 5. Глобальное обновление состояния (включая принудительный старт)
+    if (gameStateUpdate) {
+      state = { ...state, ...gameStateUpdate };
+      changed = true;
+    }
+
+    // 6. Авто-старт (если все готовы и игроков > 1)
+    if (state.status === 'lobby' && state.players.length >= 2) {
+      const allReady = state.players.every((p: any) => p.isReady);
+      if (allReady) {
+        state.status = 'playing';
+        state.history.unshift("🚀 Все готовы! Начинаем.");
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 86400 });
+    }
+
+    return new Response(JSON.stringify(state), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-};
+}
