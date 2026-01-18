@@ -26,31 +26,23 @@ export function useStore() {
     const lobbyId = savedLobby || Math.random().toString(36).substring(2, 7).toUpperCase();
     if (typeof window !== 'undefined') localStorage.setItem('tribe_active_lobby', lobbyId);
     
-    // Начальное состояние всегда включает ТЕКУЩЕГО ИГРОКА локально
-    const me: GamePlayer = {
-      id: user.id, name: user.name, avatar: user.photo_url || "",
-      position: 0, cash: 50000, isBankrupt: false, isReady: false,
-      deposits: [], ownedAssets: [], isHost: true
-    };
-
     return {
-      players: [me],
+      players: [],
       pendingPlayers: [],
       currentPlayerIndex: 0,
-      history: ["Инициализация твоего пространства..."],
+      history: ["Синхронизация..."],
       turnNumber: 1,
       ownedAssets: {},
       reactions: [],
       lobbyId: lobbyId,
       status: 'lobby',
-      lastRoll: null,
-      hostId: user.id
+      lastRoll: null
     };
   });
 
   const isSyncingRef = useRef(false);
 
-  // Глобальная синхронизация
+  // Синхронизация
   const syncWithServer = async (payload: any, priority = false) => {
     const lobbyId = payload.lobbyId || gameState.lobbyId;
     if (!lobbyId) return;
@@ -64,8 +56,10 @@ export function useStore() {
         body: JSON.stringify({ 
           lobbyId, 
           player: { 
-            id: user.id, name: user.name, avatar: user.photo_url || "",
-            isReady: gameState.players.find(p => p.id === user.id)?.isReady || false
+            id: user.id, 
+            name: user.name, 
+            avatar: user.photo_url || "",
+            isReady: payload.player?.isReady ?? gameState.players.find(p => p.id === user.id)?.isReady ?? false
           },
           ...payload 
         })
@@ -74,12 +68,10 @@ export function useStore() {
         const data = await res.json();
         if (data && data.lobbyId) {
           setGameState(prev => {
-            // Гарантируем, что МЫ всегда есть в списке, даже если сервер "забыл"
             const serverPlayers = data.players || [];
-            const meIdx = serverPlayers.findIndex((p: any) => p.id === user.id);
-            if (meIdx === -1) {
-              const myLocalData = prev.players.find(p => p.id === user.id);
-              if (myLocalData) serverPlayers.push(myLocalData);
+            // Гарантируем присутствие себя в списке
+            if (!serverPlayers.some((p: any) => p.id === user.id)) {
+              serverPlayers.push({ id: user.id, name: user.name, avatar: user.photo_url, isReady: false, position: 0, cash: 50000 });
             }
             return { ...prev, ...data, players: serverPlayers };
           });
@@ -92,14 +84,16 @@ export function useStore() {
     }
   };
 
-  // Deep Links
+  // Обработка Deep Links
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
       tg.ready();
-      const startParam = tg.initDataUnsafe?.start_param;
+      
+      // Параметры могут быть в start_param или в startapp
+      const startParam = tg.initDataUnsafe?.start_param || new URLSearchParams(window.location.search).get('startapp');
+      
       if (startParam) {
-        // P_ означает запрос в ПАРТНЕРЫ, G_ означает запрос в ИГРУ
         const isPartnerRequest = startParam.startsWith('P_');
         const code = startParam.replace('P_', '').replace('G_', '').toUpperCase();
         
@@ -107,10 +101,8 @@ export function useStore() {
         setView(AppView.SOCIAL);
         
         if (isPartnerRequest) {
-           // Постучаться в партнеры
            syncWithServer({ lobbyId: code, action: 'knock' }, true);
         } else {
-           // Обычный вход в игру
            syncWithServer({ lobbyId: code }, true);
         }
       }
@@ -122,14 +114,13 @@ export function useStore() {
     syncWithServer({ action: 'approve', targetId: partnerId }, true);
   };
 
-  // Принудительный старт (даже одному)
+  // Принудительный старт
   const forceStartGame = () => {
-    const up = { status: 'playing', history: ["🚀 АРЕНА ЗАПУЩЕНА ХОЗЯИНОМ!"] };
-    syncWithServer({ gameStateUpdate: up }, true);
+    syncWithServer({ gameStateUpdate: { status: 'playing', history: ["🚀 АРЕНА ЗАПУЩЕНА ХОЗЯИНОМ!"] } }, true);
   };
 
   const partners = useMemo(() => {
-    return gameState.players
+    return (gameState.players || [])
       .filter(p => p.id !== user.id && !p.isBot)
       .map(p => ({
         id: p.id, name: p.name, avatar: p.avatar,
@@ -193,7 +184,9 @@ export function useStore() {
       const tg = (window as any).Telegram?.WebApp;
       const lobbyCode = gameState.lobbyId;
       const prefix = type === 'partner' ? 'P_' : 'G_';
-      const botLink = `https://t.me/tribe_goals_bot?start=${prefix}${lobbyCode}`;
+      
+      // ВАЖНО: Используем формат /app?startapp для Mini Apps
+      const botLink = `https://t.me/tribe_goals_bot/app?startapp=${prefix}${lobbyCode}`;
       
       const description = type === 'partner' 
         ? `Присоединяйся к моему Племени! 🤝 Стань моим партнером по целям.\nЖми ссылку, чтобы постучаться:` 
@@ -213,7 +206,7 @@ export function useStore() {
     createNewLobby: () => {
       const newId = Math.random().toString(36).substring(2, 7).toUpperCase();
       localStorage.setItem('tribe_active_lobby', newId);
-      setGameState(prev => ({ ...prev, lobbyId: newId, players: [prev.players.find(p => p.id === user.id)!], status: 'lobby' }));
+      setGameState(prev => ({ ...prev, lobbyId: newId, players: [], status: 'lobby' }));
       syncWithServer({ lobbyId: newId, resetLobby: true }, true);
     },
     joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }, true),
@@ -224,9 +217,8 @@ export function useStore() {
     },
     startGame: () => {
       const me = gameState.players.find(p => p.id === user.id);
-      if (!me) return;
-      const nextReady = !me.isReady;
-      syncWithServer({ player: { ...me, isReady: nextReady } }, true);
+      const nextReady = !(me?.isReady || false);
+      syncWithServer({ player: { id: user.id, isReady: nextReady } }, true);
     },
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     addTransaction: (a: number, t: any, c: string) => { setTransactions(p => [...p, { id: crypto.randomUUID(), amount: a, type: t, category: c, timestamp: new Date().toISOString() }]); },

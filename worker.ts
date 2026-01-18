@@ -51,30 +51,56 @@ export default {
       let changed = false;
 
       if (resetLobby) {
+        // Очищаем всех кроме хоста и ботов
         state.players = state.players.filter((p: any) => p.id === state.hostId || p.isBot);
         state.status = 'lobby';
-        state.history = ["Лобби очищено хозяином."];
+        state.history = ["Лобби обновлено."];
         changed = true;
       }
 
-      // Система "Стука" (Knock)
+      // 1. Обработка действий (Стук/Одобрение)
       if (action === 'knock' && player) {
-        const alreadyPending = state.pendingPlayers.some((p: any) => p.id === player.id);
+        const alreadyPending = (state.pendingPlayers || []).some((p: any) => p.id === player.id);
         const alreadyIn = state.players.some((p: any) => p.id === player.id);
         if (!alreadyPending && !alreadyIn) {
+          if (!state.pendingPlayers) state.pendingPlayers = [];
           state.pendingPlayers.push({ ...player, status: 'pending' });
-          state.history.unshift(`🔔 ${player.name} постучался в Племя!`);
+          state.history.unshift(`🔔 ${player.name} хочет в Племя!`);
           changed = true;
         }
       }
 
-      // Одобрение партнера
       if (action === 'approve' && targetId) {
         const idx = state.pendingPlayers.findIndex((p: any) => p.id === targetId);
         if (idx > -1) {
           const newPartner = state.pendingPlayers.splice(idx, 1)[0];
-          state.players.push({ ...newPartner, status: 'accepted', position: 0, cash: 50000 });
-          state.history.unshift(`✅ ${newPartner.name} теперь в твоем Племени!`);
+          state.players.push({ ...newPartner, status: 'accepted', position: 0, cash: 50000, isReady: false });
+          state.history.unshift(`✅ ${newPartner.name} принят в Племя!`);
+          changed = true;
+        }
+      }
+
+      // 2. Добавление/Обновление игрока (КРИТИЧЕСКИЙ ФИКС)
+      if (player && player.id && !action) {
+        const idx = state.players.findIndex((p: any) => p.id === player.id);
+        if (idx > -1) {
+          // Обновляем существующего
+          state.players[idx] = { ...state.players[idx], ...player };
+          changed = true;
+        } else {
+          // Добавляем НОВОГО игрока
+          const isFirst = state.players.length === 0;
+          state.players.push({ 
+            ...player, 
+            isHost: isFirst, 
+            position: 0, 
+            cash: 50000, 
+            isReady: player.isReady || false,
+            deposits: [],
+            ownedAssets: []
+          });
+          if (isFirst) state.hostId = player.id;
+          state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
           changed = true;
         }
       }
@@ -85,28 +111,25 @@ export default {
         changed = true;
       }
 
-      if (player && player.id && !action) {
-        const idx = state.players.findIndex((p: any) => p.id === player.id);
-        if (idx > -1) {
-          state.players[idx] = { ...state.players[idx], ...player };
-          changed = true;
-        } else if (state.players.length === 0) {
-           // Первый вошедший становится хостом
-           state.players.push({ ...player, isHost: true, position: 0, cash: 50000 });
-           state.hostId = player.id;
-           changed = true;
-        }
-      }
-
       if (addBot) {
         state.players.push({ ...addBot, id: 'bot-' + Date.now(), isReady: true, isBot: true });
-        state.history.unshift(`🤖 Бот ${addBot.name} готов к игре!`);
+        state.history.unshift(`🤖 Бот ${addBot.name} в деле!`);
         changed = true;
       }
 
       if (gameStateUpdate) {
         state = { ...state, ...gameStateUpdate };
         changed = true;
+      }
+
+      // Авто-старт если все готовы (минимум 2)
+      if (state.status === 'lobby') {
+        const readyCount = state.players.filter((p: any) => p.isReady === true).length;
+        if (readyCount >= 2 && state.players.length >= 2) {
+          state.status = 'playing';
+          state.history.unshift("🚀 ИГРА НАЧАЛАСЬ!");
+          changed = true;
+        }
       }
 
       if (changed || !data) {

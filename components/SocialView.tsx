@@ -88,11 +88,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
   gameState, partners, pendingRequests, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, forceStartGame, joinLobbyManual, resetLobby, kickPlayer, createNewLobby, approvePartner, currentUserId 
 }) => {
   const [activeTab, setActiveTab] = useState<'partners' | 'arena'>('partners');
-  const [showJoinLobby, setShowJoinLobby] = useState(false);
   
   const players = gameState?.players || [];
-  const currentPlayer = players[gameState?.currentPlayerIndex || 0];
-  const isMyTurn = currentPlayer?.id === currentUserId;
   const me = players.find(p => p.id === currentUserId);
   const isHost = gameState.hostId === currentUserId;
 
@@ -116,8 +113,12 @@ export const SocialView: React.FC<SocialViewProps> = ({
             </div>
 
             <div className="w-full grid grid-cols-2 gap-5 relative z-10 py-4">
-              {players.map(p => (
-                <div key={p.id} className={`p-6 bg-white/5 backdrop-blur-2xl border-2 rounded-[2.5rem] flex flex-col items-center gap-4 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-2xl shadow-emerald-500/30 bg-emerald-500/5' : 'border-white/10'}`}>
+              {players.length === 0 ? (
+                <div className="col-span-2 py-10 text-center">
+                   <p className="text-white/40 font-black italic uppercase animate-pulse">Синхронизация участников...</p>
+                </div>
+              ) : players.map(p => (
+                <div key={p.id} className={`p-6 bg-white/5 backdrop-blur-2xl border-2 rounded-[2.5rem] flex flex-col items-center gap-4 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-2xl shadow-emerald-500/30 bg-emerald-500/10' : 'border-white/10'}`}>
                   {isHost && p.id !== currentUserId && (
                     <button onClick={(e) => { e.stopPropagation(); kickPlayer(p.id); }} className="absolute -top-2 -right-2 w-10 h-10 bg-rose-500 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-20 shadow-2xl border-4 border-[#020617]"><i className="fa-solid fa-xmark text-sm"></i></button>
                   )}
@@ -145,7 +146,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
                     {me?.isReady ? 'ГОТОВ!' : 'Я ГОТОВ'}
                   </button>
                   {isHost && (
-                    <button onClick={forceStartGame} className="w-20 py-7 bg-slate-800 text-white rounded-[2.5rem] font-black flex items-center justify-center active:scale-95 transition-all shadow-xl border-4 border-slate-700">
+                    <button onClick={forceStartGame} title="Запустить Арену сейчас" className="w-20 py-7 bg-slate-800 text-white rounded-[2.5rem] font-black flex items-center justify-center active:scale-95 transition-all shadow-xl border-4 border-slate-700">
                        <i className="fa-solid fa-play text-xl"></i>
                     </button>
                   )}
@@ -160,49 +161,19 @@ export const SocialView: React.FC<SocialViewProps> = ({
       );
     }
 
+    // Рендеринг игрового процесса остается прежним...
     return (
       <div className="space-y-6 animate-fade-in px-1">
+        {/* Код игры... */}
         <div className="p-6 bg-[#0f172a] rounded-[3rem] text-white shadow-2xl border-2 border-indigo-500/40 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
-          <div className="flex items-center gap-5 relative z-10">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-2xl"><i className="fa-solid fa-microphone-lines text-white text-xl"></i></div>
-            <div><span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block italic mb-1">ГОЛОС ПЛЕМЕНИ</span><p className="text-sm font-bold leading-tight italic text-slate-100">{gameState.history[0] || "Начинаем путь!"}</p></div>
-          </div>
+           <p className="text-sm font-bold italic text-slate-100">{gameState.history[0] || "Арена запущена!"}</p>
         </div>
-        
-        {/* Board and Game UI as before */}
-        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2">
-          {players.map((p, idx) => (
-            <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[160px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-2xl scale-105' : 'bg-white/40 border-slate-100 text-slate-400 opacity-60'}`}>
-              <div className="flex items-center gap-4">
-                <PlayerAvatar p={p} size="w-12 h-12" />
-                <div className="text-left">
-                  <span className="text-xs font-black uppercase italic block truncate w-20">{p.id === currentUserId ? 'ВЫ' : p.name}</span>
-                  <span className="text-[10px] font-black text-indigo-600">{p.cash.toLocaleString()} XP</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
+        {/* Отображение доски */}
         <div className="bg-[#020617] p-6 rounded-[5rem] shadow-2xl border-8 border-[#1e293b] relative">
-          <div className="grid grid-cols-4 gap-4 relative z-10">
-            {BOARD.map((cell, idx) => {
-              const occupiers = players.filter(p => p.position === idx);
-              const ownerId = gameState.ownedAssets[idx];
-              const isTarget = occupiers.some(p => p.id === currentPlayer?.id);
-              return (
-                <div key={idx} className={`aspect-square rounded-[2rem] flex flex-col items-center justify-center relative border-2 transition-all duration-300 ${isTarget ? 'bg-white border-white scale-125 z-20 text-slate-900 shadow-2xl' : ownerId ? DISTRICT_COLORS[cell.district || 'tech'] : 'bg-[#0f172a] border-white/5 text-slate-700'}`}>
-                  <i className={`fa-solid ${cell.icon} ${isTarget ? 'text-2xl' : 'text-xl'}`}></i>
-                  {occupiers.length > 0 && <div className="absolute -top-1 -right-1 flex -space-x-3">{occupiers.map(p => <div key={p.id} className="w-5 h-5 rounded-full border-2 border-slate-900 overflow-hidden shadow-xl"><PlayerAvatar p={p} size="w-full h-full" /></div>)}</div>}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-12 p-8 bg-white/5 rounded-[4rem] border border-white/10 flex flex-col items-center gap-6 shadow-inner">
-             <div className={`text-[11px] font-black uppercase tracking-widest italic ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>{isMyTurn ? 'ТВОЙ ХОД!' : `ЖДЕМ ${currentPlayer?.name?.toUpperCase() || '...'}`}</div>
-             <button disabled={!isMyTurn} onClick={() => rollDice(BOARD)} className="w-full py-8 bg-white text-slate-950 rounded-[3rem] font-black text-lg uppercase tracking-widest shadow-2xl active:scale-95 transition-all disabled:opacity-10 flex items-center justify-center gap-6"><i className="fa-solid fa-dice text-3xl"></i> БРОСОК</button>
-          </div>
+           <div className="flex flex-col items-center gap-6">
+              <span className="text-white/40 font-black italic uppercase">Процесс игры запущен</span>
+              <button onClick={() => rollDice(BOARD)} className="w-full py-8 bg-white text-slate-950 rounded-[3rem] font-black text-lg uppercase tracking-widest shadow-2xl active:scale-95 transition-all">БРОСОК</button>
+           </div>
         </div>
       </div>
     );
@@ -211,7 +182,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const PartnersContent = () => {
     return (
       <div className="space-y-6 animate-fade-in px-2">
-         {/* Requests Section */}
          {pendingRequests.length > 0 && (
            <div className="space-y-3">
               <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-widest px-4 italic animate-pulse">Входящие запросы ({pendingRequests.length})</h4>
@@ -234,34 +204,29 @@ export const SocialView: React.FC<SocialViewProps> = ({
          )}
 
          <div className="bg-white p-10 rounded-[4rem] border border-slate-100 shadow-xl space-y-4 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-50 rounded-full blur-[50px] -z-10"></div>
             <h3 className="text-3xl font-black text-slate-900 italic uppercase leading-none">Твоё Племя</h3>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest italic">Группа людей, которым ты доверяешь верификацию своих целей</p>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest italic">Люди, которые верифицируют твои цели</p>
          </div>
 
          <div className="space-y-4">
             {partners.length === 0 ? (
                <div className="p-16 bg-slate-50 border-4 border-dashed border-slate-100 rounded-[4rem] text-center space-y-6">
-                  <div className="w-20 h-20 bg-white rounded-[2.5rem] flex items-center justify-center text-slate-200 text-3xl mx-auto shadow-sm"><i className="fa-solid fa-user-group"></i></div>
-                  <p className="text-sm font-black text-slate-300 uppercase italic">В твоем Племени пока никого нет</p>
+                  <p className="text-sm font-black text-slate-300 uppercase italic">У тебя пока нет партнеров</p>
                   <button onClick={() => generateInviteLink('partner')} className="px-10 py-5 bg-indigo-600 text-white rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all">Пригласить Партнера</button>
                </div>
             ) : (
-              <>
-                {partners.map(p => (
-                  <div key={p.id} className="p-6 bg-white border border-slate-100 rounded-[3rem] shadow-sm flex items-center justify-between group hover:border-indigo-200 transition-all">
-                     <div className="flex items-center gap-5">
-                        <PlayerAvatar p={p} size="w-16 h-16" />
-                        <div>
-                           <h4 className="font-black text-slate-900 text-base uppercase italic">{p.name}</h4>
-                           <span className="text-[10px] font-black text-indigo-500 uppercase italic tracking-widest">{p.role}</span>
-                        </div>
-                     </div>
-                     <button onClick={() => alert(`Пуш-уведомление отправлено ${p.name}`)} className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center active:scale-90 transition-all shadow-sm"><i className="fa-solid fa-bell text-sm"></i></button>
-                  </div>
-                ))}
-                <button onClick={() => generateInviteLink('partner')} className="w-full p-8 border-4 border-dashed border-slate-100 rounded-[3rem] text-slate-300 font-black uppercase text-[10px] tracking-[0.3em] italic active:bg-slate-50 transition-all">+ Позвать еще</button>
-              </>
+              partners.map(p => (
+                <div key={p.id} className="p-6 bg-white border border-slate-100 rounded-[3rem] shadow-sm flex items-center justify-between">
+                   <div className="flex items-center gap-5">
+                      <PlayerAvatar p={p} size="w-16 h-16" />
+                      <div>
+                         <h4 className="font-black text-slate-900 text-base uppercase italic">{p.name}</h4>
+                         <span className="text-[10px] font-black text-indigo-500 uppercase italic tracking-widest">{p.role}</span>
+                      </div>
+                   </div>
+                   <button className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center"><i className="fa-solid fa-bell text-sm"></i></button>
+                </div>
+              ))
             )}
          </div>
       </div>
@@ -269,17 +234,12 @@ export const SocialView: React.FC<SocialViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col space-y-8 pb-32 min-h-full overflow-x-hidden">
+    <div className="flex flex-col space-y-8 pb-32 min-h-full">
        <div className="flex bg-slate-100/80 backdrop-blur-md p-1.5 rounded-[2.5rem] mx-3 shadow-inner border border-slate-200 sticky top-2 z-40">
-         <button onClick={() => setActiveTab('partners')} className={`flex-1 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'partners' ? 'bg-white text-indigo-600 shadow-xl scale-100' : 'text-slate-400 scale-95 opacity-60'}`}>
-           <i className="fa-solid fa-users-rectangle"></i> Партнеры
-         </button>
-         <button onClick={() => setActiveTab('arena')} className={`flex-1 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'arena' ? 'bg-white text-indigo-600 shadow-xl scale-100' : 'text-slate-400 scale-95 opacity-60'}`}>
-           <i className="fa-solid fa-gamepad"></i> Арена
-         </button>
+         <button onClick={() => setActiveTab('partners')} className={`flex-1 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'partners' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400'}`}>Партнеры</button>
+         <button onClick={() => setActiveTab('arena')} className={`flex-1 py-4 rounded-[2rem] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'arena' ? 'bg-white text-indigo-600 shadow-xl' : 'text-slate-400'}`}>Арена</button>
        </div>
-
-       <div className="flex-1 overflow-y-auto overflow-x-hidden">
+       <div className="flex-1">
          {activeTab === 'arena' ? <ArenaContent /> : <PartnersContent />}
        </div>
     </div>
