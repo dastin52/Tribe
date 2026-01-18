@@ -26,22 +26,31 @@ export function useStore() {
     const lobbyId = savedLobby || Math.random().toString(36).substring(2, 7).toUpperCase();
     if (typeof window !== 'undefined') localStorage.setItem('tribe_active_lobby', lobbyId);
     
+    // Начальное состояние всегда включает ТЕКУЩЕГО ИГРОКА локально
+    const me: GamePlayer = {
+      id: user.id, name: user.name, avatar: user.photo_url || "",
+      position: 0, cash: 50000, isBankrupt: false, isReady: false,
+      deposits: [], ownedAssets: [], isHost: true
+    };
+
     return {
-      players: [],
+      players: [me],
+      pendingPlayers: [],
       currentPlayerIndex: 0,
-      history: ["Инициализация..."],
+      history: ["Инициализация твоего пространства..."],
       turnNumber: 1,
       ownedAssets: {},
       reactions: [],
       lobbyId: lobbyId,
       status: 'lobby',
-      lastRoll: null
+      lastRoll: null,
+      hostId: user.id
     };
   });
 
   const isSyncingRef = useRef(false);
 
-  // Синхронизация с сервером
+  // Глобальная синхронизация
   const syncWithServer = async (payload: any, priority = false) => {
     const lobbyId = payload.lobbyId || gameState.lobbyId;
     if (!lobbyId) return;
@@ -55,9 +64,7 @@ export function useStore() {
         body: JSON.stringify({ 
           lobbyId, 
           player: { 
-            id: user.id, 
-            name: user.name, 
-            avatar: user.photo_url || "",
+            id: user.id, name: user.name, avatar: user.photo_url || "",
             isReady: gameState.players.find(p => p.id === user.id)?.isReady || false
           },
           ...payload 
@@ -66,81 +73,88 @@ export function useStore() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.lobbyId) {
-          setGameState(prev => ({ ...prev, ...data }));
+          setGameState(prev => {
+            // Гарантируем, что МЫ всегда есть в списке, даже если сервер "забыл"
+            const serverPlayers = data.players || [];
+            const meIdx = serverPlayers.findIndex((p: any) => p.id === user.id);
+            if (meIdx === -1) {
+              const myLocalData = prev.players.find(p => p.id === user.id);
+              if (myLocalData) serverPlayers.push(myLocalData);
+            }
+            return { ...prev, ...data, players: serverPlayers };
+          });
         }
       }
     } catch (e) {
       console.error("Sync error:", e);
     } finally {
-      setTimeout(() => { isSyncingRef.current = false; }, priority ? 100 : 2000);
+      setTimeout(() => { isSyncingRef.current = false; }, priority ? 100 : 3000);
     }
   };
 
-  // Динамический список партнеров на основе игроков лобби
-  // Added useMemo to React imports to fix "Cannot find name 'useMemo'" error
-  const partners = useMemo(() => {
-    const lobbyPartners: AccountabilityPartner[] = gameState.players
-      .filter(p => p.id !== user.id && !p.isBot)
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        avatar: p.avatar,
-        role: 'teammate',
-        xp: p.cash
-      }));
-    return [...SAMPLE_PARTNERS, ...lobbyPartners];
-  }, [gameState.players, user.id]);
-
-  // Обработка Telegram Deep Links
+  // Deep Links
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
       tg.ready();
       const startParam = tg.initDataUnsafe?.start_param;
       if (startParam) {
-        const code = startParam.toUpperCase();
+        // P_ означает запрос в ПАРТНЕРЫ, G_ означает запрос в ИГРУ
+        const isPartnerRequest = startParam.startsWith('P_');
+        const code = startParam.replace('P_', '').replace('G_', '').toUpperCase();
+        
         localStorage.setItem('tribe_active_lobby', code);
-        setGameState(prev => ({ ...prev, lobbyId: code, players: [] }));
         setView(AppView.SOCIAL);
-        syncWithServer({ lobbyId: code }, true);
-      }
-      
-      if (tg.initDataUnsafe?.user) {
-        const u = tg.initDataUnsafe.user;
-        const fullName = u.first_name + (u.last_name ? ` ${u.last_name}` : '');
-        setUser(prev => ({ ...prev, id: String(u.id), name: fullName, photo_url: u.photo_url || "" }));
-        localStorage.setItem('tribe_user_id', String(u.id));
-        localStorage.setItem('tribe_user_name', fullName);
+        
+        if (isPartnerRequest) {
+           // Постучаться в партнеры
+           syncWithServer({ lobbyId: code, action: 'knock' }, true);
+        } else {
+           // Обычный вход в игру
+           syncWithServer({ lobbyId: code }, true);
+        }
       }
     }
   }, []);
 
-  // Обеспечение присутствия в лобби
-  useEffect(() => {
-    if (view === AppView.SOCIAL && user.id && gameState.lobbyId) {
-      syncWithServer({}, true);
-    }
-  }, [view, user.id, gameState.lobbyId]);
+  // Одобрение партнера
+  const approvePartner = (partnerId: string) => {
+    syncWithServer({ action: 'approve', targetId: partnerId }, true);
+  };
+
+  // Принудительный старт (даже одному)
+  const forceStartGame = () => {
+    const up = { status: 'playing', history: ["🚀 АРЕНА ЗАПУЩЕНА ХОЗЯИНОМ!"] };
+    syncWithServer({ gameStateUpdate: up }, true);
+  };
+
+  const partners = useMemo(() => {
+    return gameState.players
+      .filter(p => p.id !== user.id && !p.isBot)
+      .map(p => ({
+        id: p.id, name: p.name, avatar: p.avatar,
+        role: 'teammate' as const, xp: p.cash, status: 'accepted' as const
+      }));
+  }, [gameState.players, user.id]);
+
+  const pendingRequests = useMemo(() => {
+    return (gameState.pendingPlayers || []).map(p => ({
+      id: p.id, name: p.name, avatar: p.avatar,
+      role: 'teammate' as const, xp: 0, status: 'pending' as const
+    }));
+  }, [gameState.pendingPlayers]);
 
   // Фоновый опрос
   useEffect(() => {
     if (!gameState.lobbyId || view !== AppView.SOCIAL) return;
-    const fetchLobby = async () => {
-      if (document.hidden || isSyncingRef.current) return;
-      try {
-        const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.lobbyId) setGameState(prev => ({ ...prev, ...data }));
-        }
-      } catch (e) {}
-    };
-    const interval = setInterval(fetchLobby, 4000);
+    const interval = setInterval(() => syncWithServer({}, false), 4000);
     return () => clearInterval(interval);
   }, [gameState.lobbyId, view]);
 
   return {
-    user, view, setView, goals, subgoals, partners, transactions, gameState,
+    user, view, setView, goals, subgoals, partners, pendingRequests, transactions, gameState,
+    approvePartner,
+    forceStartGame,
     rollDice: (board: BoardCell[]) => {
       const roll = Math.floor(Math.random() * 6) + 1;
       setGameState(p => ({...p, lastRoll: roll}));
@@ -175,12 +189,15 @@ export function useStore() {
         return { ...prev, ...up };
       });
     },
-    generateInviteLink: () => {
+    generateInviteLink: (type: 'partner' | 'game' = 'partner') => {
       const tg = (window as any).Telegram?.WebApp;
       const lobbyCode = gameState.lobbyId;
-      // Важно: ссылка должна вести на бота с параметром start
-      const botLink = `https://t.me/tribe_goals_bot?start=${lobbyCode}`;
-      const description = `Присоединяйся к моему Племени в Tribe! 🚀\n\nВместе мы будем:\n✅ Достигать целей\n✅ Верифицировать прогресс\n✅ Строить капитал\n\nИспользуй мой код: ${lobbyCode}\nЖми ссылку, чтобы войти:`;
+      const prefix = type === 'partner' ? 'P_' : 'G_';
+      const botLink = `https://t.me/tribe_goals_bot?start=${prefix}${lobbyCode}`;
+      
+      const description = type === 'partner' 
+        ? `Присоединяйся к моему Племени! 🤝 Стань моим партнером по целям.\nЖми ссылку, чтобы постучаться:` 
+        : `Заходи на Арену! 🚀 Пора проверить наш капитал в игре.\nЖми ссылку, чтобы войти в лобби:`;
       
       if (tg && tg.openTelegramLink) {
         tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=${encodeURIComponent(description)}`);
@@ -190,40 +207,26 @@ export function useStore() {
       }
     },
     resetLobby: () => {
-      const me: GamePlayer = { id: user.id, name: user.name, avatar: user.photo_url || "", position: 0, cash: 50000, isBankrupt: false, isReady: false, deposits: [], ownedAssets: [] };
-      syncWithServer({ resetLobby: true, player: me }, true);
+      syncWithServer({ resetLobby: true }, true);
     },
     kickPlayer: (pid: string) => syncWithServer({ kickPlayerId: pid }, true),
     createNewLobby: () => {
       const newId = Math.random().toString(36).substring(2, 7).toUpperCase();
       localStorage.setItem('tribe_active_lobby', newId);
-      setGameState(p => ({ ...p, lobbyId: newId, players: [], status: 'lobby', history: ["Создано новое племя."] }));
-      syncWithServer({ lobbyId: newId }, true);
+      setGameState(prev => ({ ...prev, lobbyId: newId, players: [prev.players.find(p => p.id === user.id)!], status: 'lobby' }));
+      syncWithServer({ lobbyId: newId, resetLobby: true }, true);
     },
     joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }, true),
     joinLobbyManual: (code: string) => { 
       const c = code.toUpperCase().trim();
       localStorage.setItem('tribe_active_lobby', c);
-      setGameState(p => ({ ...p, lobbyId: c, players: [], status: 'lobby' })); 
       syncWithServer({ lobbyId: c }, true);
     },
     startGame: () => {
-      const currentReady = gameState.players.find(p => p.id === user.id)?.isReady || false;
-      const nextReady = !currentReady;
-      
-      setGameState(prev => ({
-        ...prev,
-        players: prev.players.map(p => p.id === user.id ? { ...p, isReady: nextReady } : p)
-      }));
-
-      syncWithServer({ 
-        player: { 
-          id: user.id, 
-          name: user.name, 
-          avatar: user.photo_url || "", 
-          isReady: nextReady 
-        } 
-      }, true);
+      const me = gameState.players.find(p => p.id === user.id);
+      if (!me) return;
+      const nextReady = !me.isReady;
+      syncWithServer({ player: { ...me, isReady: nextReady } }, true);
     },
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     addTransaction: (a: number, t: any, c: string) => { setTransactions(p => [...p, { id: crypto.randomUUID(), amount: a, type: t, category: c, timestamp: new Date().toISOString() }]); },

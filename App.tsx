@@ -90,15 +90,19 @@ const App: React.FC = () => {
       {store.view === AppView.SOCIAL && (
         <SocialView 
           gameState={store.gameState}
+          partners={store.partners}
+          pendingRequests={store.pendingRequests}
           rollDice={store.rollDice}
           buyAsset={store.buyAsset}
           generateInviteLink={store.generateInviteLink}
           joinFakePlayer={store.joinFakePlayer}
           startGame={store.startGame}
+          forceStartGame={store.forceStartGame}
           joinLobbyManual={store.joinLobbyManual}
           resetLobby={store.resetLobby}
           kickPlayer={store.kickPlayer}
           createNewLobby={store.createNewLobby}
+          approvePartner={store.approvePartner}
           currentUserId={store.user.id}
         />
       )}

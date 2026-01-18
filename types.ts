@@ -27,10 +27,12 @@ export interface GamePlayer {
   deposits: GameDeposit[];
   ownedAssets: number[]; 
   isHost?: boolean;
+  status?: 'pending' | 'accepted'; // Для системы одобрения в племя
 }
 
 export interface GameState {
   players: GamePlayer[];
+  pendingPlayers: GamePlayer[]; // Те, кто "постучался"
   currentPlayerIndex: number;
   history: string[];
   turnNumber: number;
@@ -39,6 +41,18 @@ export interface GameState {
   lobbyId: string | null;
   status: 'lobby' | 'playing' | 'finished';
   lastRoll: number | null;
+  hostId?: string;
+}
+
+/**
+ * FinancialSnapshot defines the structure of a user's financial state at a given time.
+ */
+export interface FinancialSnapshot {
+  total_assets: number;
+  total_debts: number;
+  monthly_income: number;
+  monthly_expenses: number;
+  currency: string;
 }
 
 export interface User {
@@ -49,13 +63,8 @@ export interface User {
   level: number;
   streak?: number;
   last_active?: string;
-  financials?: {
-    total_assets: number;
-    total_debts: number;
-    monthly_income: number;
-    monthly_expenses: number;
-    currency: string;
-  };
+  // Use the dedicated FinancialSnapshot interface for consistency
+  financials?: FinancialSnapshot;
   energy_profile: {
     peak_hours: number[];
     low_energy_hours?: number[];
@@ -111,6 +120,7 @@ export interface YearGoal {
   confidence_level?: number;
   difficulty?: number;
   is_shared?: boolean;
+  is_private?: boolean;
   image_url?: string;
   logs: ProgressLog[];
 }
@@ -146,6 +156,7 @@ export interface AccountabilityPartner {
   role: PartnerRole;
   avatar?: string;
   xp?: number;
+  status?: 'pending' | 'accepted';
 }
 
 export interface Value {
@@ -155,13 +166,19 @@ export interface Value {
   priority: number;
 }
 
+/**
+ * Meeting interface for synchronization sessions between partners.
+ */
 export interface Meeting {
   id: string;
   title: string;
-  time: string;
-  category: GoalCategory;
+  timestamp: string;
+  partner_id: string;
 }
 
+/**
+ * Debt interface to track financial obligations.
+ */
 export interface Debt {
   id: string;
   title: string;
@@ -172,6 +189,9 @@ export interface Debt {
   due_date?: string;
 }
 
+/**
+ * Subscription interface for tracking recurring expenses.
+ */
 export interface Subscription {
   id: string;
   title: string;
@@ -179,5 +199,3 @@ export interface Subscription {
   period: 'monthly' | 'yearly';
   category: string;
 }
-
-export type FinancialSnapshot = Required<NonNullable<User['financials']>>;
