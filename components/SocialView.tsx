@@ -48,6 +48,7 @@ interface SocialViewProps {
   joinFakePlayer: () => void;
   startGame: () => void;
   joinLobbyManual: (code: string) => void;
+  resetLobby: () => void;
   currentUserId: string;
 }
 
@@ -88,7 +89,7 @@ const PlayerCard: React.FC<{ p: GamePlayer }> = ({ p }) => (
 );
 
 export const SocialView: React.FC<SocialViewProps> = ({ 
-  gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, currentUserId 
+  gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, currentUserId 
 }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showInput, setShowInput] = useState(false);
@@ -115,8 +116,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
           
           <div className="relative z-10 text-center space-y-4 w-full">
             <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none pt-4">ЗАЛ<br/>ОЖИДАНИЯ</h2>
-            <div className="bg-white/5 px-6 py-2 rounded-full border border-white/10 flex items-center gap-2 mx-auto w-fit">
-               <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
+            <div className="flex items-center gap-2 justify-center">
+              <div className="bg-white/5 px-6 py-2 rounded-full border border-white/10 flex items-center gap-2 w-fit">
+                <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
+              </div>
+              <button onClick={() => { if(confirm("Очистить список игроков?")) resetLobby(); }} className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center active:scale-90 transition-all">
+                <i className="fa-solid fa-trash-can text-xs"></i>
+              </button>
             </div>
           </div>
 

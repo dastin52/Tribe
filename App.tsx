@@ -78,15 +78,15 @@ const App: React.FC = () => {
           user={store.user} meetings={[]} todayTasks={todayTasks} 
           balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible}
           netWorth={netWorth} balanceHistory={[]}
-          onUpdateTask={store.updateSubgoalProgress} goals={store.goals}
+          onUpdateTask={()=>{}} goals={store.goals}
           partners={store.partners} onSetView={store.setView} onSelectGoal={setSelectedGoal}
         />
       )}
       {store.view === AppView.FINANCE && (
-        <FinanceView financials={financials} transactions={store.transactions} debts={[]} subscriptions={[]} balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible} netWorth={netWorth} balanceHistory={[]} onAddTransaction={store.addTransaction} onAddDebt={()=>{}} onAddSubscription={()=>{}} goals={store.goals} />
+        <FinanceView financials={financials as any} transactions={store.transactions} debts={[]} subscriptions={[]} balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible} netWorth={netWorth} balanceHistory={[]} onAddTransaction={store.addTransaction} onAddDebt={()=>{}} onAddSubscription={()=>{}} goals={store.goals} />
       )}
       {store.view === AppView.GOALS && <GoalsView goals={store.goals} onAddGoal={() => setShowWizard(true)} onSelectGoal={setSelectedGoal} />}
-      {store.view === AppView.ANALYTICS && <AnalyticsView goals={store.goals} partners={store.partners} ikigaiData={ikigaiData} onTogglePrivacy={store.toggleGoalPrivacy} transactions={store.transactions} currency={financials.currency} />}
+      {store.view === AppView.ANALYTICS && <AnalyticsView goals={store.goals} partners={store.partners} ikigaiData={ikigaiData} onTogglePrivacy={()=>{}} transactions={store.transactions} currency={financials.currency} />}
       {store.view === AppView.SOCIAL && (
         <SocialView 
           gameState={store.gameState}
@@ -96,6 +96,7 @@ const App: React.FC = () => {
           joinFakePlayer={store.joinFakePlayer}
           startGame={store.startGame}
           joinLobbyManual={store.joinLobbyManual}
+          resetLobby={store.resetLobby}
           currentUserId={store.user.id}
         />
       )}

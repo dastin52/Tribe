@@ -7,17 +7,12 @@ const API_BASE = "https://tribe-api.serzh-karimov-97.workers.dev";
 const BOARD_CELLS_COUNT = 24;
 
 export function useStore() {
-  // Гарантируем уникальный ID игрока, который не меняется при перезагрузке
   const [user, setUser] = useState<User>(() => {
     const savedId = typeof window !== 'undefined' ? localStorage.getItem('tribe_user_id') : null;
     const userId = savedId || 'u' + Math.random().toString(36).substring(2, 9);
     if (typeof window !== 'undefined' && !savedId) localStorage.setItem('tribe_user_id', userId);
     
-    return {
-      ...INITIAL_USER,
-      id: userId,
-      photo_url: "" // Очищаем моковые фото
-    };
+    return { ...INITIAL_USER, id: userId };
   });
   
   const [view, setView] = useState<AppView>(AppView.LANDING);
@@ -45,7 +40,6 @@ export function useStore() {
   });
 
   const isSyncingRef = useRef(false);
-  const lastStateHash = useRef("");
 
   const syncWithServer = async (payload: any) => {
     if (!gameState.lobbyId || isSyncingRef.current) return;
@@ -58,12 +52,7 @@ export function useStore() {
       });
       if (res.ok) {
         const data = await res.json();
-        const cleanData = { ...data, lobbyId: data.lobbyId || gameState.lobbyId };
-        const hash = JSON.stringify(cleanData);
-        if (hash !== lastStateHash.current) {
-          lastStateHash.current = hash;
-          setGameState(cleanData);
-        }
+        setGameState({ ...data, lobbyId: data.lobbyId || gameState.lobbyId });
       }
     } catch (e) {
       console.error("Sync error:", e);
@@ -74,25 +63,15 @@ export function useStore() {
 
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      if (tg.initDataUnsafe?.user) {
-        const u = tg.initDataUnsafe.user;
-        setUser(prev => ({
-          ...prev,
-          id: String(u.id),
-          name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
-          photo_url: u.photo_url || ""
-        }));
-        localStorage.setItem('tribe_user_id', String(u.id));
-      }
-      const startParam = tg.initDataUnsafe?.start_param;
-      if (startParam) {
-        const newId = startParam.toUpperCase();
-        localStorage.setItem('tribe_active_lobby', newId);
-        setGameState(prev => ({ ...prev, lobbyId: newId }));
-        setView(AppView.SOCIAL);
-      }
+    if (tg && tg.initDataUnsafe?.user) {
+      const u = tg.initDataUnsafe.user;
+      setUser(prev => ({
+        ...prev,
+        id: String(u.id),
+        name: u.first_name + (u.last_name ? ` ${u.last_name}` : ''),
+        photo_url: u.photo_url || ""
+      }));
+      localStorage.setItem('tribe_user_id', String(u.id));
     }
   }, []);
 
@@ -114,46 +93,20 @@ export function useStore() {
 
   useEffect(() => {
     if (!gameState.lobbyId || view !== AppView.SOCIAL) return;
-    
     const fetchLobby = async () => {
       if (document.hidden || isSyncingRef.current) return;
       try {
         const res = await fetch(`${API_BASE}/lobby?id=${gameState.lobbyId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data && data.lobbyId) {
-          const hash = JSON.stringify(data);
-          if (hash !== lastStateHash.current) {
-            lastStateHash.current = hash;
-            setGameState(prev => ({ ...data, lastRoll: prev.lastRoll }));
-          }
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.lobbyId) setGameState(prev => ({ ...data, lastRoll: prev.lastRoll }));
         }
       } catch (e) {}
     };
-
     const interval = setInterval(fetchLobby, 5000);
     fetchLobby();
     return () => clearInterval(interval);
   }, [gameState.lobbyId, view]);
-
-  const generateInviteLink = useCallback(() => {
-    const tg = (window as any).Telegram?.WebApp;
-    const lid = gameState.lobbyId;
-    if (!lid) return;
-
-    const botUser = "tribe_goals_bot"; 
-    const inviteUrl = `https://t.me/${botUser}?start=${lid}`;
-    const shareText = `Входи в моё племя! 🚀 Код: ${lid}`;
-    
-    if (tg && tg.openTelegramLink) {
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`;
-      tg.HapticFeedback?.impactOccurred('medium');
-      tg.openTelegramLink(shareUrl);
-    } else {
-      navigator.clipboard.writeText(inviteUrl);
-      alert("Ссылка скопирована!");
-    }
-  }, [gameState.lobbyId]);
 
   return {
     user, view, setView, goals, subgoals, partners, transactions, gameState,
@@ -177,32 +130,48 @@ export function useStore() {
         });
       }, 2000);
     },
-    generateInviteLink,
-    buyAsset: async (cid: number, b: BoardCell[]) => {
-      const pIdx = (gameState.currentPlayerIndex - 1 + gameState.players.length) % gameState.players.length;
-      const p = gameState.players[pIdx];
-      if (p && p.cash >= (b[cid].cost || 0)) {
-        await syncWithServer({ gameStateUpdate: {
-          ownedAssets: { ...gameState.ownedAssets, [cid]: p.id },
-          players: gameState.players.map((pl, i) => i === pIdx ? { ...pl, cash: pl.cash - (b[cid].cost || 0) } : pl)
-        }});
+    // Added buyAsset to handle purchasing board assets and fix type error in App.tsx
+    buyAsset: (cellId: number, board: BoardCell[]) => {
+      setGameState(prev => {
+        const cp = prev.players[prev.currentPlayerIndex];
+        const cell = board[cellId];
+        if (!cp || !cell || cell.type !== 'asset' || !cell.cost || cp.cash < cell.cost || prev.ownedAssets[cellId]) {
+          return prev;
+        }
+
+        const up = {
+          players: prev.players.map((p, i) => i === prev.currentPlayerIndex ? { 
+            ...p, 
+            cash: p.cash - (cell.cost || 0),
+            ownedAssets: [...p.ownedAssets, cellId] 
+          } : p),
+          ownedAssets: { ...prev.ownedAssets, [cellId]: cp.id },
+          history: [`🏠 ${cp.name} купил ${cell.title}`, ...prev.history].slice(0, 10)
+        };
+        syncWithServer({ gameStateUpdate: up });
+        return { ...prev, ...up };
+      });
+    },
+    generateInviteLink: () => {
+      const tg = (window as any).Telegram?.WebApp;
+      const inviteUrl = `https://t.me/tribe_goals_bot?start=${gameState.lobbyId}`;
+      if (tg && tg.openTelegramLink) {
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent("Входи в моё племя! 🚀")}`);
+      } else {
+        navigator.clipboard.writeText(inviteUrl);
+        alert("Ссылка скопирована!");
       }
     },
+    resetLobby: () => syncWithServer({ resetLobby: true, player: { id: user.id, name: user.name, avatar: user.photo_url || "", position: 0, cash: 50000, isBankrupt: false, isReady: false, deposits: [], ownedAssets: [] } }),
     joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }),
     joinLobbyManual: (code: string) => { 
       const c = code.toUpperCase().trim();
-      if (!c) return;
       localStorage.setItem('tribe_active_lobby', c);
       setGameState(p => ({ ...p, lobbyId: c, players: [] })); 
-      // Принудительно запускаем синхронизацию для нового ID
-      isSyncingRef.current = false;
     },
     startGame: () => syncWithServer({ player: { id: user.id, isReady: !gameState.players.find(p=>p.id===user.id)?.isReady } }),
-    updateSubgoalProgress: () => {},
     addGoalWithPlan: (g: any, s: any) => { setGoals(p => [...p, g]); setSubgoals(p => [...p, ...s]); },
     addTransaction: (a: number, t: any, c: string) => { setTransactions(p => [...p, { id: crypto.randomUUID(), amount: a, type: t, category: c, timestamp: new Date().toISOString() }]); },
-    addPartner: (n: string, r: string) => { setPartners(p => [...p, { id: crypto.randomUUID(), name: n, role: r as any }]); },
-    toggleGoalPrivacy: (id: string) => { setGoals(p => p.map(g => g.id === id ? { ...g, is_shared: !g.is_shared } : g)); },
     updateUserInfo: (data: Partial<User>) => { setUser(p => ({ ...p, ...data })); },
     resetData: () => { localStorage.clear(); window.location.reload(); }
   };
