@@ -83,7 +83,7 @@ const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w
 const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }> = ({ p, isMe, onKick }) => (
   <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-white/10'}`}>
     {!isMe && (
-      <button onClick={onKick} className="absolute top-2 right-2 w-6 h-6 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-500 transition-colors">
+      <button onClick={onKick} className="absolute top-2 right-2 w-6 h-6 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-500 transition-colors z-20">
         <i className="fa-solid fa-xmark text-[10px]"></i>
       </button>
     )}
@@ -130,7 +130,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
               <div className="bg-white/5 px-6 py-2 rounded-full border border-white/10 flex items-center gap-2 w-fit">
                 <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
               </div>
-              <button onClick={() => { if(confirm("Полностью очистить лобби и оставить только вас?")) resetLobby(); }} className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center active:scale-90 transition-all" title="Очистить лобби">
+              <button onClick={() => { if(confirm("Очистить лобби? Все остальные игроки будут удалены.")) resetLobby(); }} className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center active:scale-90 transition-all" title="Очистить лобби">
                 <i className="fa-solid fa-trash-can text-xs"></i>
               </button>
             </div>

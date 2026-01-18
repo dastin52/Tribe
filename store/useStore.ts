@@ -52,7 +52,7 @@ export function useStore() {
       });
       if (res.ok) {
         const data = await res.json();
-        setGameState({ ...data, lobbyId: data.lobbyId || gameState.lobbyId });
+        setGameState(prev => ({ ...data, lobbyId: data.lobbyId || prev.lobbyId }));
       }
     } catch (e) {
       console.error("Sync error:", e);
@@ -75,6 +75,7 @@ export function useStore() {
     }
   }, []);
 
+  // Update join info when user data or lobby changes
   useEffect(() => {
     if (!gameState.lobbyId || !user.id) return;
     const me: GamePlayer = {
@@ -84,12 +85,12 @@ export function useStore() {
       position: 0,
       cash: 50000,
       isBankrupt: false,
-      isReady: false,
+      isReady: gameState.players.find(p => p.id === user.id)?.isReady || false,
       deposits: [],
       ownedAssets: [],
     };
     syncWithServer({ player: me });
-  }, [user.id, gameState.lobbyId]);
+  }, [user.id, user.name, user.photo_url, gameState.lobbyId]);
 
   useEffect(() => {
     if (!gameState.lobbyId || view !== AppView.SOCIAL) return;

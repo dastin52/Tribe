@@ -97,6 +97,8 @@ const App: React.FC = () => {
           startGame={store.startGame}
           joinLobbyManual={store.joinLobbyManual}
           resetLobby={store.resetLobby}
+          kickPlayer={store.kickPlayer}
+          createNewLobby={store.createNewLobby}
           currentUserId={store.user.id}
         />
       )}
