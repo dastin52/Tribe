@@ -57,7 +57,7 @@ interface SocialViewProps {
 const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w-20 h-20" }) => {
   const [imgError, setImgError] = useState(false);
   const emoji = useMemo(() => {
-    const hash = p.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const hash = (p.id || '0').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return EMOJI_AVATARS[hash % EMOJI_AVATARS.length];
   }, [p.id]);
 
@@ -85,7 +85,7 @@ const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }>
     {!isMe && (
       <button 
         onClick={(e) => { e.stopPropagation(); onKick(); }} 
-        className="absolute top-2 right-2 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-20 shadow-lg"
+        className="absolute -top-2 -right-2 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-20 shadow-lg border-2 border-slate-900"
         title="Удалить игрока"
       >
         <i className="fa-solid fa-xmark text-xs"></i>
@@ -94,8 +94,8 @@ const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }>
     <PlayerAvatar p={p} />
     <div className="text-center">
       <div className="flex flex-col items-center">
-        <span className="font-black italic uppercase text-[12px] text-white block truncate w-24 leading-none">{p.name}</span>
-        {isMe && <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mt-1">ЭТО ВЫ</span>}
+        <span className="font-black italic uppercase text-[12px] text-white block truncate w-24 leading-none">{p.name || 'Загрузка...'}</span>
+        {isMe && <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mt-1 bg-indigo-500/10 px-2 py-0.5 rounded-full">ЭТО ВЫ</span>}
       </div>
       <span className={`text-[8px] font-black uppercase tracking-widest block mt-2 ${p.isReady ? 'text-emerald-400' : 'text-slate-500'}`}>{p.isReady ? 'ГОТОВ' : 'ЖДЕМ...'}</span>
     </div>
@@ -130,13 +130,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div className="relative z-10 text-center space-y-4 w-full">
             <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none pt-4">ЗАЛ<br/>ОЖИДАНИЯ</h2>
             <div className="flex items-center gap-2 justify-center">
-              <div className="bg-white/5 px-6 py-2 rounded-full border border-white/10 flex items-center gap-2 w-fit">
-                <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
+              <div className="bg-indigo-600/20 px-6 py-2 rounded-2xl border-2 border-indigo-500/30 flex items-center gap-2 w-fit shadow-xl">
+                <span className="text-[14px] font-black text-white uppercase tracking-widest italic">{gameState.lobbyId}</span>
               </div>
               <button 
-                onClick={() => { if(confirm("Очистить лобби и начать поиск заново?")) resetLobby(); }} 
-                className="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all shadow-lg" 
-                title="Очистить лобби"
+                onClick={() => { if(confirm("ВНИМАНИЕ: Это удалит всех игроков и сбросит лобби. Продолжить?")) resetLobby(); }} 
+                className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-rose-400/20" 
+                title="Очистить всё"
               >
                 <i className="fa-solid fa-trash-can text-xs"></i>
               </button>
