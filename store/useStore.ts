@@ -130,21 +130,13 @@ export function useStore() {
         });
       }, 2000);
     },
-    // Added buyAsset to handle purchasing board assets and fix type error in App.tsx
     buyAsset: (cellId: number, board: BoardCell[]) => {
       setGameState(prev => {
         const cp = prev.players[prev.currentPlayerIndex];
         const cell = board[cellId];
-        if (!cp || !cell || cell.type !== 'asset' || !cell.cost || cp.cash < cell.cost || prev.ownedAssets[cellId]) {
-          return prev;
-        }
-
+        if (!cp || !cell || cell.type !== 'asset' || !cell.cost || cp.cash < cell.cost || prev.ownedAssets[cellId]) return prev;
         const up = {
-          players: prev.players.map((p, i) => i === prev.currentPlayerIndex ? { 
-            ...p, 
-            cash: p.cash - (cell.cost || 0),
-            ownedAssets: [...p.ownedAssets, cellId] 
-          } : p),
+          players: prev.players.map((p, i) => i === prev.currentPlayerIndex ? { ...p, cash: p.cash - (cell.cost || 0), ownedAssets: [...p.ownedAssets, cellId] } : p),
           ownedAssets: { ...prev.ownedAssets, [cellId]: cp.id },
           history: [`🏠 ${cp.name} купил ${cell.title}`, ...prev.history].slice(0, 10)
         };
@@ -163,6 +155,12 @@ export function useStore() {
       }
     },
     resetLobby: () => syncWithServer({ resetLobby: true, player: { id: user.id, name: user.name, avatar: user.photo_url || "", position: 0, cash: 50000, isBankrupt: false, isReady: false, deposits: [], ownedAssets: [] } }),
+    kickPlayer: (pid: string) => syncWithServer({ kickPlayerId: pid }),
+    createNewLobby: () => {
+      const newId = Math.random().toString(36).substring(2, 7).toUpperCase();
+      localStorage.setItem('tribe_active_lobby', newId);
+      setGameState(p => ({ ...p, lobbyId: newId, players: [], status: 'lobby' }));
+    },
     joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }),
     joinLobbyManual: (code: string) => { 
       const c = code.toUpperCase().trim();

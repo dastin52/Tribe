@@ -29,7 +29,7 @@ export default {
 
     if (url.pathname === "/join" && request.method === "POST") {
       const body = await request.json();
-      const { lobbyId, player, gameStateUpdate, addBot, resetLobby } = body;
+      const { lobbyId, player, gameStateUpdate, addBot, resetLobby, kickPlayerId } = body;
       
       if (!lobbyId) return new Response("No Lobby ID", { status: 400 });
       
@@ -46,12 +46,20 @@ export default {
         turnNumber: 1
       };
 
-      // КОМАНДА СБРОСА: Очищаем всех игроков кроме текущего, если пришел такой запрос
+      // КОМАНДА СБРОСА: Очищаем всех кроме текущего
       if (resetLobby) {
         state.players = [];
         state.status = 'lobby';
-        state.history = ["Лобби было очищено хостом."];
-        if (player) state.players.push(player);
+        state.history = ["Лобби очищено."];
+        if (player) state.players.push({ ...player, isReady: false });
+        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
+        return new Response(JSON.stringify(state), { headers: corsHeaders });
+      }
+
+      // КОМАНДА УДАЛЕНИЯ КОНКРЕТНОГО ИГРОКА
+      if (kickPlayerId) {
+        state.players = state.players.filter((p: any) => p.id !== kickPlayerId);
+        state.history.unshift(`🚫 Игрок был удален из лобби.`);
         await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
         return new Response(JSON.stringify(state), { headers: corsHeaders });
       }

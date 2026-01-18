@@ -49,6 +49,8 @@ interface SocialViewProps {
   startGame: () => void;
   joinLobbyManual: (code: string) => void;
   resetLobby: () => void;
+  kickPlayer: (pid: string) => void;
+  createNewLobby: () => void;
   currentUserId: string;
 }
 
@@ -78,18 +80,26 @@ const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w
   );
 };
 
-const PlayerCard: React.FC<{ p: GamePlayer }> = ({ p }) => (
-  <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up transition-all ${p.isReady ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-white/10'}`}>
+const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }> = ({ p, isMe, onKick }) => (
+  <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-white/10'}`}>
+    {!isMe && (
+      <button onClick={onKick} className="absolute top-2 right-2 w-6 h-6 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center hover:bg-rose-500 transition-colors">
+        <i className="fa-solid fa-xmark text-[10px]"></i>
+      </button>
+    )}
     <PlayerAvatar p={p} />
     <div className="text-center">
-      <span className="font-black italic uppercase text-[12px] text-white block truncate w-24">{p.name}</span>
-      <span className={`text-[8px] font-black uppercase tracking-widest block mt-1 ${p.isReady ? 'text-emerald-400' : 'text-slate-500'}`}>{p.isReady ? 'ГОТОВ' : 'ЖДЕМ...'}</span>
+      <div className="flex flex-col items-center">
+        <span className="font-black italic uppercase text-[12px] text-white block truncate w-24 leading-none">{p.name}</span>
+        {isMe && <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mt-1">ЭТО ВЫ</span>}
+      </div>
+      <span className={`text-[8px] font-black uppercase tracking-widest block mt-2 ${p.isReady ? 'text-emerald-400' : 'text-slate-500'}`}>{p.isReady ? 'ГОТОВ' : 'ЖДЕМ...'}</span>
     </div>
   </div>
 );
 
 export const SocialView: React.FC<SocialViewProps> = ({ 
-  gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, currentUserId 
+  gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, kickPlayer, createNewLobby, currentUserId 
 }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showInput, setShowInput] = useState(false);
@@ -120,14 +130,14 @@ export const SocialView: React.FC<SocialViewProps> = ({
               <div className="bg-white/5 px-6 py-2 rounded-full border border-white/10 flex items-center gap-2 w-fit">
                 <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest italic">LOBBY: {gameState.lobbyId}</span>
               </div>
-              <button onClick={() => { if(confirm("Очистить список игроков?")) resetLobby(); }} className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center active:scale-90 transition-all">
+              <button onClick={() => { if(confirm("Полностью очистить лобби и оставить только вас?")) resetLobby(); }} className="w-10 h-10 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center active:scale-90 transition-all" title="Очистить лобби">
                 <i className="fa-solid fa-trash-can text-xs"></i>
               </button>
             </div>
           </div>
 
           <div className="w-full grid grid-cols-2 gap-4 relative z-10">
-            {players.map(p => <PlayerCard key={p.id} p={p} />)}
+            {players.map(p => <PlayerCard key={p.id} p={p} isMe={p.id === currentUserId} onKick={() => kickPlayer(p.id)} />)}
             {players.length < 4 && (
               <button onClick={() => { setIsSyncing(true); joinFakePlayer(); setTimeout(() => setIsSyncing(false), 800); }} className="p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 transition-all hover:bg-white/10 text-slate-500">
                 <i className="fa-solid fa-robot text-xl"></i>
@@ -157,7 +167,10 @@ export const SocialView: React.FC<SocialViewProps> = ({
                 <button onClick={() => { setIsSyncing(true); startGame(); setTimeout(() => setIsSyncing(false), 800); }} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 ${me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'}`}>
                    {me?.isReady ? 'ОЖИДАНИЕ ИГРОКОВ' : 'Я ГОТОВ'}
                 </button>
-                <button onClick={() => setShowInput(true)} className="w-full text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors">Войти по коду</button>
+                <div className="flex gap-4 justify-center">
+                  <button onClick={() => setShowInput(true)} className="text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors">Войти по коду</button>
+                  <button onClick={createNewLobby} className="text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:text-white transition-colors">Новое лобби</button>
+                </div>
                </>
             )}
           </div>
@@ -180,7 +193,10 @@ export const SocialView: React.FC<SocialViewProps> = ({
           <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[150px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-xl' : 'bg-white/40 border-slate-100 text-slate-400 opacity-60'}`}>
             <div className="flex items-center gap-4">
               <PlayerAvatar p={p} size="w-12 h-12" />
-              <div className="text-left"><span className="text-[11px] font-black uppercase italic block truncate w-16">{p.name}</span><span className="text-[9px] font-black text-indigo-600">{p.cash.toLocaleString()} XP</span></div>
+              <div className="text-left">
+                <span className="text-[11px] font-black uppercase italic block truncate w-16">{p.id === currentUserId ? 'ВЫ' : p.name}</span>
+                <span className="text-[9px] font-black text-indigo-600">{p.cash.toLocaleString()} XP</span>
+              </div>
             </div>
           </div>
         ))}
