@@ -46,7 +46,6 @@ export default {
         turnNumber: 1
       };
 
-      // КОМАНДА СБРОСА: Очищаем всех кроме текущего
       if (resetLobby) {
         state.players = [];
         state.status = 'lobby';
@@ -56,10 +55,9 @@ export default {
         return new Response(JSON.stringify(state), { headers: corsHeaders });
       }
 
-      // КОМАНДА УДАЛЕНИЯ КОНКРЕТНОГО ИГРОКА
       if (kickPlayerId) {
         state.players = state.players.filter((p: any) => p.id !== kickPlayerId);
-        state.history.unshift(`🚫 Игрок был удален из лобби.`);
+        state.history.unshift(`🚫 Игрок удален.`);
         await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
         return new Response(JSON.stringify(state), { headers: corsHeaders });
       }
@@ -73,15 +71,14 @@ export default {
           changed = true;
         } else if (state.players.length < 4) {
           state.players.push(player);
-          state.history.unshift(`🤝 ${player.name} вошел в лобби.`);
+          state.history.unshift(`🤝 ${player.name} вошел.`);
           changed = true;
         }
       }
 
       if (addBot) {
-        const botId = 'bot-' + Math.random().toString(36).substring(2, 7);
-        state.players.push({ ...addBot, id: botId, isReady: true, isBot: true });
-        state.history.unshift(`🤖 Бот ${addBot.name} присоединился!`);
+        state.players.push({ ...addBot, id: 'bot-' + Date.now(), isReady: true, isBot: true });
+        state.history.unshift(`🤖 Бот ${addBot.name} готов!`);
         changed = true;
       }
 
@@ -90,12 +87,13 @@ export default {
         changed = true;
       }
 
+      // ЛОГИКА ЗАПУСКА: Минимум 2 игрока и все в лобби нажали "Готов"
       if (state.status === 'lobby' && state.players.length >= 2) {
         const allReady = state.players.every((p: any) => p.isReady === true);
         if (allReady) {
           state.status = 'playing';
           state.currentPlayerIndex = 0;
-          state.history.unshift("🚀 Племя начинает путь!");
+          state.history.unshift("🚀 АРЕНА ЗАПУЩЕНА!");
           changed = true;
         }
       }

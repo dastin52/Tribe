@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { GameState, BoardCell, GamePlayer } from '../types';
+import React, { useState, useMemo } from 'react';
+import { GameState, BoardCell, GamePlayer, AccountabilityPartner } from '../types';
 
 const EMOJI_AVATARS = ["🦁", "🦊", "🐻", "🐯", "🐺", "🐮", "🐼", "🐨", "🐸", "🐙"];
 
@@ -42,6 +42,7 @@ const BOARD: BoardCell[] = ([
 
 interface SocialViewProps {
   gameState: GameState;
+  partners: AccountabilityPartner[];
   rollDice: (board: BoardCell[]) => void;
   buyAsset: (cellId: number, board: BoardCell[]) => void;
   generateInviteLink: () => void;
@@ -54,10 +55,10 @@ interface SocialViewProps {
   currentUserId: string;
 }
 
-const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w-20 h-20" }) => {
-  const [imgError, setImgError] = useState(false);
+const PlayerAvatar: React.FC<{ p: any, size?: string }> = ({ p, size = "w-20 h-20" }) => {
+  const [imgError, setImgError] = React.useState(false);
   const emoji = useMemo(() => {
-    const hash = (p.id || '0').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const hash = (p.id || '0').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
     return EMOJI_AVATARS[hash % EMOJI_AVATARS.length];
   }, [p.id]);
 
@@ -80,31 +81,10 @@ const PlayerAvatar: React.FC<{ p: GamePlayer, size?: string }> = ({ p, size = "w
   );
 };
 
-const PlayerCard: React.FC<{ p: GamePlayer, isMe: boolean, onKick: () => void }> = ({ p, isMe, onKick }) => (
-  <div className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-white/10'}`}>
-    {!isMe && (
-      <button 
-        onClick={(e) => { e.stopPropagation(); onKick(); }} 
-        className="absolute -top-2 -right-2 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-20 shadow-lg border-2 border-slate-900"
-        title="Удалить игрока"
-      >
-        <i className="fa-solid fa-xmark text-xs"></i>
-      </button>
-    )}
-    <PlayerAvatar p={p} />
-    <div className="text-center">
-      <div className="flex flex-col items-center">
-        <span className="font-black italic uppercase text-[12px] text-white block truncate w-24 leading-none">{p.name || 'Загрузка...'}</span>
-        {isMe && <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mt-1 bg-indigo-500/10 px-2 py-0.5 rounded-full">ЭТО ВЫ</span>}
-      </div>
-      <span className={`text-[8px] font-black uppercase tracking-widest block mt-2 ${p.isReady ? 'text-emerald-400' : 'text-slate-500'}`}>{p.isReady ? 'ГОТОВ' : 'ЖДЕМ...'}</span>
-    </div>
-  </div>
-);
-
 export const SocialView: React.FC<SocialViewProps> = ({ 
-  gameState, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, kickPlayer, createNewLobby, currentUserId 
+  gameState, partners, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, kickPlayer, createNewLobby, currentUserId 
 }) => {
+  const [activeTab, setActiveTab] = useState<'partners' | 'arena'>('arena');
   const [showInput, setShowInput] = useState(false);
   const [manualCode, setManualCode] = useState('');
   
@@ -121,119 +101,154 @@ export const SocialView: React.FC<SocialViewProps> = ({
     }
   };
 
-  if (gameState.status === 'lobby') {
-    return (
-      <div className="flex flex-col min-h-full animate-fade-in p-4 pb-24">
-        <div className="bg-[#020617] rounded-[3.5rem] border-4 border-[#1e293b] p-8 space-y-8 relative overflow-hidden shadow-2xl flex flex-col items-center min-h-[500px]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(99,102,241,0.15),transparent)]"></div>
-          
-          <div className="relative z-10 text-center space-y-4 w-full">
-            <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none pt-4">ЗАЛ<br/>ОЖИДАНИЯ</h2>
-            <div className="flex items-center gap-2 justify-center">
-              <div className="bg-indigo-600/20 px-6 py-2 rounded-2xl border-2 border-indigo-500/30 flex items-center gap-2 w-fit shadow-xl">
-                <span className="text-[14px] font-black text-white uppercase tracking-widest italic">{gameState.lobbyId}</span>
+  const ArenaContent = () => {
+    if (gameState.status === 'lobby') {
+      return (
+        <div className="flex flex-col animate-fade-in space-y-8">
+          <div className="bg-[#020617] rounded-[3.5rem] border-4 border-[#1e293b] p-8 space-y-8 relative overflow-hidden shadow-2xl flex flex-col items-center min-h-[500px]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(99,102,241,0.15),transparent)]"></div>
+            
+            <div className="relative z-10 text-center space-y-4 w-full">
+              <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter leading-none pt-4">АРЕНА</h2>
+              <div className="flex items-center gap-2 justify-center">
+                <div className="bg-indigo-600/20 px-6 py-2 rounded-2xl border-2 border-indigo-500/30 flex items-center gap-2 w-fit shadow-xl">
+                  <span className="text-[14px] font-black text-white uppercase tracking-widest italic">{gameState.lobbyId}</span>
+                </div>
+                <button onClick={() => { if(confirm("Сбросить всё?")) resetLobby(); }} className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-rose-400/20"><i className="fa-solid fa-trash-can text-xs"></i></button>
               </div>
-              <button 
-                onClick={() => { if(confirm("ВНИМАНИЕ: Это удалит всех игроков и сбросит лобби. Продолжить?")) resetLobby(); }} 
-                className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center active:scale-90 transition-all shadow-lg border-2 border-rose-400/20" 
-                title="Очистить всё"
-              >
-                <i className="fa-solid fa-trash-can text-xs"></i>
-              </button>
+            </div>
+
+            <div className="w-full grid grid-cols-2 gap-4 relative z-10">
+              {players.map(p => (
+                <div key={p.id} className={`p-5 bg-white/5 backdrop-blur-xl border-2 rounded-[2.2rem] flex flex-col items-center gap-3 animate-scale-up transition-all relative ${p.isReady ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-white/10'}`}>
+                  {p.id !== currentUserId && (
+                    <button onClick={(e) => { e.stopPropagation(); kickPlayer(p.id); }} className="absolute -top-2 -right-2 w-8 h-8 bg-rose-500 text-white rounded-full flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-20 shadow-lg border-2 border-slate-900"><i className="fa-solid fa-xmark text-xs"></i></button>
+                  )}
+                  <PlayerAvatar p={p} />
+                  <div className="text-center">
+                    <span className="font-black italic uppercase text-[12px] text-white block truncate w-24 leading-none">{p.name || 'Игрок'}</span>
+                    {p.id === currentUserId && <span className="text-[7px] font-black text-indigo-400 uppercase tracking-widest mt-1 bg-indigo-500/10 px-2 py-0.5 rounded-full">ЭТО ВЫ</span>}
+                    <span className={`text-[8px] font-black uppercase tracking-widest block mt-2 ${p.isReady ? 'text-emerald-400' : 'text-slate-500'}`}>{p.isReady ? 'ГОТОВ' : 'ЖДЕМ...'}</span>
+                  </div>
+                </div>
+              ))}
+              {players.length < 4 && (
+                <button onClick={joinFakePlayer} className="p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 transition-all hover:bg-white/10 active:scale-95 text-slate-500">
+                  <i className="fa-solid fa-robot text-xl"></i>
+                  <span className="text-[8px] font-black uppercase tracking-widest italic">+ БОТ</span>
+                </button>
+              )}
+            </div>
+
+            <div className="w-full space-y-4 pt-4 relative z-10 mt-auto">
+              {showInput ? (
+                 <div className="space-y-3 animate-scale-up">
+                    <input type="text" placeholder="КОД ЛОББИ" className="w-full py-4 bg-white/10 border-2 border-white/20 rounded-[1.5rem] text-center font-black text-white outline-none focus:border-indigo-500 uppercase" value={manualCode} onChange={e => setManualCode(e.target.value)} />
+                    <div className="flex gap-2"><button onClick={handleJoin} className="flex-1 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest">ВОЙТИ</button><button onClick={() => setShowInput(false)} className="px-6 py-4 bg-white/10 text-white rounded-[1.5rem] font-black"><i className="fa-solid fa-xmark"></i></button></div>
+                 </div>
+              ) : (
+                 <>
+                  <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
+                  <button onClick={startGame} className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all ${me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'}`}>
+                     {me?.isReady ? 'ОТМЕНИТЬ ГОТОВНОСТЬ' : 'Я ГОТОВ'}
+                  </button>
+                  <div className="flex gap-4 justify-center">
+                    <button onClick={() => setShowInput(true)} className="text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors">Войти по коду</button>
+                    <button onClick={createNewLobby} className="text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:text-white transition-colors">Новое лобби</button>
+                  </div>
+                 </>
+              )}
             </div>
           </div>
+        </div>
+      );
+    }
 
-          <div className="w-full grid grid-cols-2 gap-4 relative z-10">
-            {players.map(p => <PlayerCard key={p.id} p={p} isMe={p.id === currentUserId} onKick={() => kickPlayer(p.id)} />)}
-            {players.length < 4 && (
-              <button 
-                onClick={joinFakePlayer} 
-                className="p-5 bg-white/5 border-2 border-dashed border-white/10 rounded-[2.2rem] flex flex-col items-center justify-center gap-2 transition-all hover:bg-white/10 active:scale-95 text-slate-500"
-              >
-                <i className="fa-solid fa-robot text-xl"></i>
-                <span className="text-[8px] font-black uppercase tracking-widest italic">+ БОТ</span>
-              </button>
-            )}
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="p-6 bg-[#0f172a] rounded-[2.5rem] text-white shadow-2xl border-2 border-indigo-500/50">
+          <div className="flex items-center gap-5">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg"><i className="fa-solid fa-microphone-lines text-white text-lg"></i></div>
+            <div><span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block italic mb-1">ГОЛОС ПЛЕМЕНИ</span><p className="text-sm font-bold leading-tight italic text-slate-100">{gameState.history[0] || "Начинаем путь!"}</p></div>
           </div>
-
-          <div className="w-full space-y-4 pt-4 relative z-10 mt-auto">
-            {showInput ? (
-               <div className="space-y-3 animate-scale-up">
-                  <input 
-                    type="text" 
-                    placeholder="КОД ЛОББИ" 
-                    className="w-full py-4 bg-white/10 border-2 border-white/20 rounded-[1.5rem] text-center font-black text-white outline-none focus:border-indigo-500 uppercase"
-                    value={manualCode}
-                    onChange={e => setManualCode(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={handleJoin} className="flex-1 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest">ВОЙТИ</button>
-                    <button onClick={() => setShowInput(false)} className="px-6 py-4 bg-white/10 text-white rounded-[1.5rem] font-black"><i className="fa-solid fa-xmark"></i></button>
-                  </div>
-               </div>
-            ) : (
-               <>
-                <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
-                <button 
-                  onClick={startGame} 
-                  className={`w-full py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all ${me?.isReady ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900'}`}
-                >
-                   {me?.isReady ? 'ОТМЕНИТЬ ГОТОВНОСТЬ' : 'Я ГОТОВ'}
-                </button>
-                <div className="flex gap-4 justify-center">
-                  <button onClick={() => setShowInput(true)} className="text-[9px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors">Войти по коду</button>
-                  <button onClick={createNewLobby} className="text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:text-white transition-colors">Новое лобби</button>
+        </div>
+        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2">
+          {players.map((p, idx) => (
+            <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[150px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-xl' : 'bg-white/40 border-slate-100 text-slate-400 opacity-60'}`}>
+              <div className="flex items-center gap-4">
+                <PlayerAvatar p={p} size="w-12 h-12" />
+                <div className="text-left">
+                  <span className="text-[11px] font-black uppercase italic block truncate w-16">{p.id === currentUserId ? 'ВЫ' : p.name}</span>
+                  <span className="text-[9px] font-black text-indigo-600">{p.cash.toLocaleString()} XP</span>
                 </div>
-               </>
-            )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[#020617] p-5 rounded-[4.5rem] shadow-2xl border-8 border-[#1e293b]">
+          <div className="grid grid-cols-4 gap-4">
+            {BOARD.map((cell, idx) => {
+              const occupiers = players.filter(p => p.position === idx);
+              const ownerId = gameState.ownedAssets[idx];
+              const isTarget = occupiers.some(p => p.id === currentPlayer?.id);
+              return (
+                <div key={idx} className={`aspect-square rounded-[1.8rem] flex flex-col items-center justify-center relative border-2 ${isTarget ? 'bg-white border-white scale-110 z-20 text-slate-900' : ownerId ? DISTRICT_COLORS[cell.district || 'tech'] : 'bg-[#0f172a] border-white/5 text-slate-600'}`}>
+                  <i className={`fa-solid ${cell.icon} text-2xl`}></i>
+                  {occupiers.length > 0 && <div className="absolute -top-1 -right-1 flex -space-x-2">{occupiers.map(p => <div key={p.id} className="w-4 h-4 rounded-full border-2 border-slate-900 overflow-hidden"><PlayerAvatar p={p} size="w-full h-full" /></div>)}</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-10 p-8 bg-white/5 rounded-[3rem] border border-white/10 flex flex-col items-center gap-5">
+             <div className={`text-[11px] font-black uppercase tracking-widest italic ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>{isMyTurn ? 'ТВОЙ ХОД!' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}</div>
+             <button disabled={!isMyTurn} onClick={() => rollDice(BOARD)} className="w-full py-7 bg-white text-slate-950 rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-5 flex items-center justify-center gap-5"><i className="fa-solid fa-dice text-2xl"></i> БРОСОК</button>
           </div>
         </div>
       </div>
     );
-  }
+  };
+
+  const PartnersContent = () => {
+    return (
+      <div className="space-y-6 animate-fade-in">
+         <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
+            <h3 className="text-2xl font-black text-slate-900 italic uppercase">Твоё Племя</h3>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Люди, которые помогают тебе расти</p>
+         </div>
+
+         <div className="space-y-3">
+            {partners.length === 0 ? (
+               <div className="p-12 bg-slate-50 border-2 border-dashed border-slate-100 rounded-[3rem] text-center">
+                  <p className="text-[10px] font-black text-slate-300 uppercase italic">У тебя пока нет партнеров</p>
+                  <button onClick={generateInviteLink} className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest">Позвать партнера</button>
+               </div>
+            ) : partners.map(p => (
+              <div key={p.id} className="p-5 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm flex items-center justify-between">
+                 <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-900 overflow-hidden border-2 border-white shadow-sm">
+                       {p.avatar ? <img src={p.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white"><i className="fa-solid fa-user"></i></div>}
+                    </div>
+                    <div>
+                       <h4 className="font-black text-slate-800 text-sm uppercase italic">{p.name}</h4>
+                       <span className="text-[8px] font-black text-indigo-500 uppercase italic">{p.role}</span>
+                    </div>
+                 </div>
+                 <button onClick={() => alert(`Бот отправил пуш-уведомление ${p.name}!`)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center active:scale-90 transition-all"><i className="fa-solid fa-bell"></i></button>
+              </div>
+            ))}
+         </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-24 relative px-1 bg-slate-50 min-h-full">
-      <div className="mx-2 p-6 bg-[#0f172a] rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden border-2 border-indigo-500/50">
-        <div className="flex items-center gap-5 relative z-10">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg"><i className="fa-solid fa-microphone-lines text-white text-lg"></i></div>
-          <div><span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block italic mb-1">ГОЛОС ПЛЕМЕНИ</span><p className="text-sm font-bold leading-tight italic text-slate-100">{gameState.history[0] || "Начинаем путь!"}</p></div>
-        </div>
-      </div>
+    <div className="flex flex-col space-y-6 pb-24">
+       <div className="flex bg-slate-100 p-1 rounded-[2rem] mx-2">
+         <button onClick={() => setActiveTab('partners')} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'partners' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Партнеры</button>
+         <button onClick={() => setActiveTab('arena')} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'arena' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Арена</button>
+       </div>
 
-      <div className="flex gap-4 overflow-x-auto no-scrollbar px-4 py-2">
-        {players.map((p, idx) => (
-          <div key={p.id} className={`flex-shrink-0 p-5 rounded-[2.5rem] border-2 transition-all duration-500 min-w-[150px] ${gameState.currentPlayerIndex === idx ? 'bg-white border-indigo-600 shadow-xl' : 'bg-white/40 border-slate-100 text-slate-400 opacity-60'}`}>
-            <div className="flex items-center gap-4">
-              <PlayerAvatar p={p} size="w-12 h-12" />
-              <div className="text-left">
-                <span className="text-[11px] font-black uppercase italic block truncate w-16">{p.id === currentUserId ? 'ВЫ' : p.name}</span>
-                <span className="text-[9px] font-black text-indigo-600">{p.cash.toLocaleString()} XP</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-[#020617] p-5 rounded-[4.5rem] shadow-2xl border-8 border-[#1e293b] mx-2">
-        <div className="grid grid-cols-4 gap-4 relative z-10">
-          {BOARD.map((cell, idx) => {
-            const occupiers = players.filter(p => p.position === idx);
-            const ownerId = gameState.ownedAssets[idx];
-            const isTarget = occupiers.some(p => p.id === currentPlayer?.id);
-            return (
-              <div key={idx} className={`aspect-square rounded-[1.8rem] flex flex-col items-center justify-center relative border-2 ${isTarget ? 'bg-white border-white scale-110 z-20 text-slate-900' : ownerId ? DISTRICT_COLORS[cell.district || 'tech'] : 'bg-[#0f172a] border-white/5 text-slate-600'}`}>
-                <i className={`fa-solid ${cell.icon} text-2xl`}></i>
-                {occupiers.length > 0 && <div className="absolute -top-1 -right-1 flex -space-x-2">{occupiers.map(p => <div key={p.id} className="w-4 h-4 rounded-full border-2 border-slate-900 overflow-hidden"><PlayerAvatar p={p} size="w-full h-full" /></div>)}</div>}
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-10 p-8 bg-white/5 rounded-[3rem] border border-white/10 flex flex-col items-center gap-5">
-           <div className={`text-[11px] font-black uppercase tracking-widest italic ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>{isMyTurn ? 'ТВОЙ ХОД!' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}</div>
-           <button disabled={!isMyTurn} onClick={() => rollDice(BOARD)} className="w-full py-7 bg-white text-slate-950 rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-5 flex items-center justify-center gap-5"><i className="fa-solid fa-dice text-2xl"></i> БРОСОК</button>
-        </div>
-      </div>
+       {activeTab === 'arena' ? <ArenaContent /> : <PartnersContent />}
     </div>
   );
 };
