@@ -67,11 +67,12 @@ export default {
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
+          // Обновляем данные игрока, включая имя и аватар, чтобы избежать "Загрузка..."
           state.players[idx] = { ...state.players[idx], ...player };
           changed = true;
         } else if (state.players.length < 4) {
           state.players.push(player);
-          state.history.unshift(`🤝 ${player.name} вошел.`);
+          state.history.unshift(`🤝 ${player.name || 'Игрок'} вошел.`);
           changed = true;
         }
       }
@@ -87,10 +88,10 @@ export default {
         changed = true;
       }
 
-      // ЛОГИКА ЗАПУСКА: Минимум 2 игрока и все в лобби нажали "Готов"
-      if (state.status === 'lobby' && state.players.length >= 2) {
-        const allReady = state.players.every((p: any) => p.isReady === true);
-        if (allReady) {
+      // УЛУЧШЕННАЯ ЛОГИКА ЗАПУСКА: Игра стартует, если готовы хотя бы 2 игрока
+      if (state.status === 'lobby') {
+        const readyCount = state.players.filter((p: any) => p.isReady === true).length;
+        if (readyCount >= 2) {
           state.status = 'playing';
           state.currentPlayerIndex = 0;
           state.history.unshift("🚀 АРЕНА ЗАПУЩЕНА!");
@@ -106,5 +107,5 @@ export default {
     }
 
     return new Response("Not Found", { status: 404 });
-  },
+  }
 };

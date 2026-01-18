@@ -81,25 +81,37 @@ const PlayerAvatar: React.FC<{ p: any, size?: string }> = ({ p, size = "w-20 h-2
   );
 };
 
+// Отдельный компонент для формы, чтобы ввод не сбрасывался при ре-рендере родителя
+const JoinLobbyForm: React.FC<{ onJoin: (code: string) => void, onCancel: () => void }> = ({ onJoin, onCancel }) => {
+  const [code, setCode] = useState('');
+  return (
+    <div className="space-y-3 animate-scale-up">
+       <input 
+         type="text" 
+         placeholder="КОД ЛОББИ" 
+         className="w-full py-4 bg-white/10 border-2 border-white/20 rounded-[1.5rem] text-center font-black text-white outline-none focus:border-indigo-500 uppercase"
+         value={code}
+         autoFocus
+         onChange={e => setCode(e.target.value)}
+       />
+       <div className="flex gap-2">
+         <button onClick={() => onJoin(code)} className="flex-1 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest">ВОЙТИ</button>
+         <button onClick={onCancel} className="px-6 py-4 bg-white/10 text-white rounded-[1.5rem] font-black"><i className="fa-solid fa-xmark"></i></button>
+       </div>
+    </div>
+  );
+};
+
 export const SocialView: React.FC<SocialViewProps> = ({ 
   gameState, partners, rollDice, buyAsset, generateInviteLink, joinFakePlayer, startGame, joinLobbyManual, resetLobby, kickPlayer, createNewLobby, currentUserId 
 }) => {
   const [activeTab, setActiveTab] = useState<'partners' | 'arena'>('arena');
   const [showInput, setShowInput] = useState(false);
-  const [manualCode, setManualCode] = useState('');
   
   const players = gameState?.players || [];
   const currentPlayer = players[gameState?.currentPlayerIndex || 0];
   const isMyTurn = currentPlayer?.id === currentUserId;
   const me = players.find(p => p.id === currentUserId);
-
-  const handleJoin = () => {
-    if (manualCode.length > 3) {
-      joinLobbyManual(manualCode);
-      setShowInput(false);
-      setManualCode('');
-    }
-  };
 
   const ArenaContent = () => {
     if (gameState.status === 'lobby') {
@@ -142,10 +154,10 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
             <div className="w-full space-y-4 pt-4 relative z-10 mt-auto">
               {showInput ? (
-                 <div className="space-y-3 animate-scale-up">
-                    <input type="text" placeholder="КОД ЛОББИ" className="w-full py-4 bg-white/10 border-2 border-white/20 rounded-[1.5rem] text-center font-black text-white outline-none focus:border-indigo-500 uppercase" value={manualCode} onChange={e => setManualCode(e.target.value)} />
-                    <div className="flex gap-2"><button onClick={handleJoin} className="flex-1 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest">ВОЙТИ</button><button onClick={() => setShowInput(false)} className="px-6 py-4 bg-white/10 text-white rounded-[1.5rem] font-black"><i className="fa-solid fa-xmark"></i></button></div>
-                 </div>
+                 <JoinLobbyForm 
+                    onJoin={(code) => { joinLobbyManual(code); setShowInput(false); }} 
+                    onCancel={() => setShowInput(false)} 
+                 />
               ) : (
                  <>
                   <button onClick={generateInviteLink} className="w-full py-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-[2rem] font-black text-[12px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"><i className="fa-solid fa-share-nodes"></i> ПОЗВАТЬ СВОИХ</button>
@@ -200,7 +212,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
             })}
           </div>
           <div className="mt-10 p-8 bg-white/5 rounded-[3rem] border border-white/10 flex flex-col items-center gap-5">
-             <div className={`text-[11px] font-black uppercase tracking-widest italic ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>{isMyTurn ? 'ТВОЙ ХОД!' : `ЖДЕМ ${currentPlayer?.name.toUpperCase()}`}</div>
+             <div className={`text-[11px] font-black uppercase tracking-widest italic ${isMyTurn ? 'text-indigo-400 animate-bounce' : 'text-slate-600'}`}>{isMyTurn ? 'ТВОЙ ХОД!' : `ЖДЕМ ${currentPlayer?.name?.toUpperCase() || '...'}`}</div>
              <button disabled={!isMyTurn} onClick={() => rollDice(BOARD)} className="w-full py-7 bg-white text-slate-950 rounded-[2.5rem] font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-5 flex items-center justify-center gap-5"><i className="fa-solid fa-dice text-2xl"></i> БРОСОК</button>
           </div>
         </div>
@@ -210,14 +222,14 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
   const PartnersContent = () => {
     return (
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-6 animate-fade-in p-2">
          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-4">
             <h3 className="text-2xl font-black text-slate-900 italic uppercase">Твоё Племя</h3>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Люди, которые помогают тебе расти</p>
          </div>
 
          <div className="space-y-3">
-            {partners.length === 0 ? (
+            {(partners || []).length === 0 ? (
                <div className="p-12 bg-slate-50 border-2 border-dashed border-slate-100 rounded-[3rem] text-center">
                   <p className="text-[10px] font-black text-slate-300 uppercase italic">У тебя пока нет партнеров</p>
                   <button onClick={generateInviteLink} className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest">Позвать партнера</button>
@@ -225,15 +237,15 @@ export const SocialView: React.FC<SocialViewProps> = ({
             ) : partners.map(p => (
               <div key={p.id} className="p-5 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm flex items-center justify-between">
                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-slate-900 overflow-hidden border-2 border-white shadow-sm">
-                       {p.avatar ? <img src={p.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white"><i className="fa-solid fa-user"></i></div>}
+                    <div className="w-14 h-14 rounded-2xl bg-slate-900 overflow-hidden border-2 border-white shadow-sm flex items-center justify-center">
+                       {p.avatar ? <img src={p.avatar} className="w-full h-full object-cover" /> : <div className="text-white text-xl uppercase font-black italic">{p.name?.[0]}</div>}
                     </div>
                     <div>
                        <h4 className="font-black text-slate-800 text-sm uppercase italic">{p.name}</h4>
                        <span className="text-[8px] font-black text-indigo-500 uppercase italic">{p.role}</span>
                     </div>
                  </div>
-                 <button onClick={() => alert(`Бот отправил пуш-уведомление ${p.name}!`)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center active:scale-90 transition-all"><i className="fa-solid fa-bell"></i></button>
+                 <button onClick={() => alert(`Бот отправил пуш-уведомление ${p.name}!`)} className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center active:scale-90 transition-all shadow-sm"><i className="fa-solid fa-bell"></i></button>
               </div>
             ))}
          </div>
@@ -242,13 +254,15 @@ export const SocialView: React.FC<SocialViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col space-y-6 pb-24">
-       <div className="flex bg-slate-100 p-1 rounded-[2rem] mx-2">
-         <button onClick={() => setActiveTab('partners')} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'partners' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Партнеры</button>
-         <button onClick={() => setActiveTab('arena')} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'arena' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Арена</button>
+    <div className="flex flex-col space-y-6 pb-24 min-h-full">
+       <div className="flex bg-slate-100 p-1 rounded-[2rem] mx-2 shadow-inner border border-slate-200">
+         <button onClick={() => setActiveTab('partners')} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'partners' ? 'bg-white text-indigo-600 shadow-md scale-100' : 'text-slate-400 scale-95 opacity-60'}`}>Партнеры</button>
+         <button onClick={() => setActiveTab('arena')} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'arena' ? 'bg-white text-indigo-600 shadow-md scale-100' : 'text-slate-400 scale-95 opacity-60'}`}>Арена</button>
        </div>
 
-       {activeTab === 'arena' ? <ArenaContent /> : <PartnersContent />}
+       <div className="flex-1 overflow-y-auto px-1">
+         {activeTab === 'arena' ? <ArenaContent /> : <PartnersContent />}
+       </div>
     </div>
   );
 };
