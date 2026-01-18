@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { User, AppView, GameState, GamePlayer, BoardCell, YearGoal, SubGoal, Transaction, AccountabilityPartner } from '../types';
 import { INITIAL_USER, SAMPLE_GOALS, SAMPLE_SUBGOALS, SAMPLE_PARTNERS, SAMPLE_TRANSACTIONS } from './initialData';
 
@@ -19,7 +19,6 @@ export function useStore() {
   const [view, setView] = useState<AppView>(AppView.LANDING);
   const [goals, setGoals] = useState<YearGoal[]>(SAMPLE_GOALS);
   const [subgoals, setSubgoals] = useState<SubGoal[]>(SAMPLE_SUBGOALS);
-  const [partners, setPartners] = useState<AccountabilityPartner[]>(SAMPLE_PARTNERS);
   const [transactions, setTransactions] = useState<Transaction[]>(SAMPLE_TRANSACTIONS);
   
   const [gameState, setGameState] = useState<GameState>(() => {
@@ -42,9 +41,10 @@ export function useStore() {
 
   const isSyncingRef = useRef(false);
 
-  // Централизованная синхронизация с сервером
+  // Синхронизация с сервером
   const syncWithServer = async (payload: any, priority = false) => {
-    if (!gameState.lobbyId) return;
+    const lobbyId = payload.lobbyId || gameState.lobbyId;
+    if (!lobbyId) return;
     if (!priority && isSyncingRef.current) return;
     
     isSyncingRef.current = true;
@@ -53,12 +53,12 @@ export function useStore() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          lobbyId: gameState.lobbyId, 
-          // Всегда передаем актуальный профиль, чтобы сервер не терял данные
+          lobbyId, 
           player: { 
             id: user.id, 
             name: user.name, 
-            avatar: user.photo_url || "" 
+            avatar: user.photo_url || "",
+            isReady: gameState.players.find(p => p.id === user.id)?.isReady || false
           },
           ...payload 
         })
@@ -66,66 +66,63 @@ export function useStore() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.lobbyId) {
-          // Сохраняем локально, но не перезаписываем то, что изменилось только что оптимистично
-          setGameState(prev => ({
-            ...prev,
-            ...data,
-            // Если мы сами поменяли статус готовности, доверяем локальному состоянию пока сервер не подтвердит
-            players: data.players.map((p: any) => {
-               if (p.id === user.id) {
-                 const localMe = prev.players.find(lp => lp.id === user.id);
-                 return { ...p, isReady: localMe?.isReady ?? p.isReady };
-               }
-               return p;
-            })
-          }));
+          setGameState(prev => ({ ...prev, ...data }));
         }
       }
     } catch (e) {
       console.error("Sync error:", e);
     } finally {
-      setTimeout(() => { isSyncingRef.current = false; }, priority ? 100 : 1200);
+      setTimeout(() => { isSyncingRef.current = false; }, priority ? 100 : 2000);
     }
   };
 
+  // Динамический список партнеров на основе игроков лобби
+  // Added useMemo to React imports to fix "Cannot find name 'useMemo'" error
+  const partners = useMemo(() => {
+    const lobbyPartners: AccountabilityPartner[] = gameState.players
+      .filter(p => p.id !== user.id && !p.isBot)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        role: 'teammate',
+        xp: p.cash
+      }));
+    return [...SAMPLE_PARTNERS, ...lobbyPartners];
+  }, [gameState.players, user.id]);
+
+  // Обработка Telegram Deep Links
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
-    if (tg && tg.initDataUnsafe?.user) {
-      const u = tg.initDataUnsafe.user;
-      const fullName = u.first_name + (u.last_name ? ` ${u.last_name}` : '');
-      setUser(prev => {
-        const newUser = { ...prev, id: String(u.id), name: fullName, photo_url: u.photo_url || "" };
+    if (tg) {
+      tg.ready();
+      const startParam = tg.initDataUnsafe?.start_param;
+      if (startParam) {
+        const code = startParam.toUpperCase();
+        localStorage.setItem('tribe_active_lobby', code);
+        setGameState(prev => ({ ...prev, lobbyId: code, players: [] }));
+        setView(AppView.SOCIAL);
+        syncWithServer({ lobbyId: code }, true);
+      }
+      
+      if (tg.initDataUnsafe?.user) {
+        const u = tg.initDataUnsafe.user;
+        const fullName = u.first_name + (u.last_name ? ` ${u.last_name}` : '');
+        setUser(prev => ({ ...prev, id: String(u.id), name: fullName, photo_url: u.photo_url || "" }));
         localStorage.setItem('tribe_user_id', String(u.id));
         localStorage.setItem('tribe_user_name', fullName);
-        return newUser;
-      });
+      }
     }
   }, []);
 
-  // Жесткое обеспечение присутствия игрока в списке
+  // Обеспечение присутствия в лобби
   useEffect(() => {
-    if (view === AppView.SOCIAL && user.id) {
-      setGameState(prev => {
-        const exists = prev.players.some(p => p.id === user.id);
-        if (exists) return prev;
-        
-        const me: GamePlayer = {
-          id: user.id,
-          name: user.name,
-          avatar: user.photo_url || "",
-          position: 0,
-          cash: 50000,
-          isBankrupt: false,
-          isReady: false,
-          deposits: [],
-          ownedAssets: [],
-        };
-        return { ...prev, players: [...prev.players, me] };
-      });
+    if (view === AppView.SOCIAL && user.id && gameState.lobbyId) {
       syncWithServer({}, true);
     }
-  }, [view, user.id]);
+  }, [view, user.id, gameState.lobbyId]);
 
+  // Фоновый опрос
   useEffect(() => {
     if (!gameState.lobbyId || view !== AppView.SOCIAL) return;
     const fetchLobby = async () => {
@@ -138,7 +135,7 @@ export function useStore() {
         }
       } catch (e) {}
     };
-    const interval = setInterval(fetchLobby, 5000);
+    const interval = setInterval(fetchLobby, 4000);
     return () => clearInterval(interval);
   }, [gameState.lobbyId, view]);
 
@@ -181,14 +178,15 @@ export function useStore() {
     generateInviteLink: () => {
       const tg = (window as any).Telegram?.WebApp;
       const lobbyCode = gameState.lobbyId;
-      const inviteUrl = `https://t.me/tribe_goals_bot?start=${lobbyCode}`;
-      const description = `Привет! Я приглашаю тебя в своё племя в Tribe 🚀\n\nЗдесь мы вместе достигаем целей, верифицируем прогресс друг друга и строим капитал. Это наша общая операционная система для роста.\n\nКод для входа: ${lobbyCode}\n\nПрисоединяйся к моей команде:`;
+      // Важно: ссылка должна вести на бота с параметром start
+      const botLink = `https://t.me/tribe_goals_bot?start=${lobbyCode}`;
+      const description = `Присоединяйся к моему Племени в Tribe! 🚀\n\nВместе мы будем:\n✅ Достигать целей\n✅ Верифицировать прогресс\n✅ Строить капитал\n\nИспользуй мой код: ${lobbyCode}\nЖми ссылку, чтобы войти:`;
       
       if (tg && tg.openTelegramLink) {
-        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(description)}`);
+        tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(botLink)}&text=${encodeURIComponent(description)}`);
       } else {
-        navigator.clipboard.writeText(`${description}\n${inviteUrl}`);
-        alert(`Текст приглашения и ссылка скопированы!`);
+        navigator.clipboard.writeText(`${description}\n${botLink}`);
+        alert(`Приглашение скопировано!`);
       }
     },
     resetLobby: () => {
@@ -200,19 +198,19 @@ export function useStore() {
       const newId = Math.random().toString(36).substring(2, 7).toUpperCase();
       localStorage.setItem('tribe_active_lobby', newId);
       setGameState(p => ({ ...p, lobbyId: newId, players: [], status: 'lobby', history: ["Создано новое племя."] }));
+      syncWithServer({ lobbyId: newId }, true);
     },
     joinFakePlayer: () => syncWithServer({ addBot: { name: "AI Бот", position: 0, cash: 50000, isBankrupt: false, isReady: true, isBot: true, ownedAssets: [] } }, true),
     joinLobbyManual: (code: string) => { 
       const c = code.toUpperCase().trim();
       localStorage.setItem('tribe_active_lobby', c);
       setGameState(p => ({ ...p, lobbyId: c, players: [], status: 'lobby' })); 
-      syncWithServer({}, true);
+      syncWithServer({ lobbyId: c }, true);
     },
     startGame: () => {
       const currentReady = gameState.players.find(p => p.id === user.id)?.isReady || false;
       const nextReady = !currentReady;
       
-      // Оптимистичное обновление локально
       setGameState(prev => ({
         ...prev,
         players: prev.players.map(p => p.id === user.id ? { ...p, isReady: nextReady } : p)

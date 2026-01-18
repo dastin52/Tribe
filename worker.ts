@@ -49,16 +49,16 @@ export default {
       if (resetLobby) {
         state.players = [];
         state.status = 'lobby';
-        state.history = ["Лобби очищено."];
+        state.history = ["Племя обновлено."];
         if (player) state.players.push({ ...player, isReady: false });
-        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
+        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 86400 });
         return new Response(JSON.stringify(state), { headers: corsHeaders });
       }
 
       if (kickPlayerId) {
         state.players = state.players.filter((p: any) => p.id !== kickPlayerId);
-        state.history.unshift(`🚫 Игрок удален.`);
-        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
+        state.history.unshift(`🚫 Участник покинул группу.`);
+        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 86400 });
         return new Response(JSON.stringify(state), { headers: corsHeaders });
       }
       
@@ -67,12 +67,12 @@ export default {
       if (player && player.id) {
         const idx = state.players.findIndex((p: any) => p.id === player.id);
         if (idx > -1) {
-          // Обновляем данные игрока, включая имя и аватар, чтобы избежать "Загрузка..."
+          // Мержим данные, сохраняя состояние готовности и текущие атрибуты
           state.players[idx] = { ...state.players[idx], ...player };
           changed = true;
-        } else if (state.players.length < 4) {
+        } else if (state.players.length < 8) {
           state.players.push(player);
-          state.history.unshift(`🤝 ${player.name || 'Игрок'} вошел.`);
+          state.history.unshift(`🤝 ${player.name || 'Участник'} присоединился.`);
           changed = true;
         }
       }
@@ -88,19 +88,18 @@ export default {
         changed = true;
       }
 
-      // УЛУЧШЕННАЯ ЛОГИКА ЗАПУСКА: Игра стартует, если готовы хотя бы 2 игрока
+      // Авто-старт Арены
       if (state.status === 'lobby') {
         const readyCount = state.players.filter((p: any) => p.isReady === true).length;
         if (readyCount >= 2) {
           state.status = 'playing';
-          state.currentPlayerIndex = 0;
           state.history.unshift("🚀 АРЕНА ЗАПУЩЕНА!");
           changed = true;
         }
       }
 
       if (changed || !data) {
-        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 3600 });
+        await env.TRIBE_KV.put(lobbyKey, JSON.stringify(state), { expirationTtl: 86400 });
       }
       
       return new Response(JSON.stringify(state), { headers: corsHeaders });
