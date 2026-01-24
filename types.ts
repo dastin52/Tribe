@@ -78,7 +78,8 @@ export enum AppView {
   FINANCE = 'finance',
   GOALS = 'goals',
   ANALYTICS = 'analytics',
-  SETTINGS = 'settings'
+  SETTINGS = 'settings',
+  FOCUS = 'focus'
 }
 
 export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison';

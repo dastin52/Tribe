@@ -20,6 +20,20 @@ export const geminiService = {
     }
   },
 
+  async getFocusMantra(taskTitle: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Сгенерируй одну мощную, короткую мантру (до 7 слов) для глубокой концентрации на задаче: "${taskTitle}". 
+        Стиль: Стоицизм или Киберпанк. Без знаков препинания в конце.`,
+      });
+      return response.text;
+    } catch (e) {
+      return "Твое внимание — твой главный актив";
+    }
+  },
+
   async getFinanceAdvice(txs: any[], goals: any[]) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

@@ -16,10 +16,11 @@ interface DashboardViewProps {
   partners: AccountabilityPartner[];
   onSetView: (view: AppView) => void;
   onSelectGoal: (goal: YearGoal) => void;
+  onEnterFocus: (taskId: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ 
-  user, todayTasks, onUpdateTask, goals, partners, onSetView, onSelectGoal 
+  user, todayTasks, onUpdateTask, goals, partners, onSetView, onSelectGoal, onEnterFocus 
 }) => {
   const [briefing, setBriefing] = useState<string>('Загружаю твой план...');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -131,19 +132,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                </div>
             ) : filteredTasks.map(sg => (
               <div key={sg.id} className="p-5 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between group active:scale-98 transition-all mx-1">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-1">
                    <button onClick={() => onUpdateTask(sg.id, sg.target_value, partners.length === 0)} className={`w-12 h-12 rounded-2xl ${partners.length === 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'} flex items-center justify-center shadow-sm active:scale-90 transition-all`}>
                       <i className={`fa-solid ${partners.length === 0 ? 'fa-check-double' : 'fa-paper-plane'} text-sm`}></i>
                    </button>
-                   <div>
+                   <div className="flex-1">
                       <h4 className="font-bold text-slate-800 text-sm leading-tight italic uppercase">{sg.title}</h4>
                       <div className="flex items-center gap-2 mt-0.5">
-                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest italic">{partners.length === 0 ? 'Личное подтверждение' : 'Ждет верификации'}</span>
-                         <div className="w-1 h-1 bg-slate-200 rounded-full"></div>
                          <span className="text-[8px] font-black text-indigo-500 uppercase tracking-tighter italic">{sg.target_value} {sg.metric}</span>
                       </div>
                    </div>
                 </div>
+                <button 
+                  onClick={() => onEnterFocus(sg.id)}
+                  className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md active:scale-90 transition-all"
+                >
+                   <i className="fa-solid fa-bullseye text-xs"></i>
+                </button>
               </div>
             ))}
          </div>

@@ -10,6 +10,7 @@ import { GoalsView } from './components/GoalsView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SocialView } from './components/SocialView';
 import { SettingsView } from './components/SettingsView';
+import { FocusView } from './components/FocusView';
 
 declare global {
   interface Window {
@@ -51,6 +52,10 @@ const App: React.FC = () => {
     return store.subgoals.filter(sg => sg.current_value < sg.target_value);
   }, [store.subgoals]);
 
+  const focusedTask = useMemo(() => {
+    return store.subgoals.find(sg => sg.id === store.activeTaskId);
+  }, [store.subgoals, store.activeTaskId]);
+
   if (store.view === AppView.LANDING) {
     return (
       <div className="h-full bg-white flex flex-col items-center justify-center p-10 text-center animate-fade-in relative overflow-hidden">
@@ -80,6 +85,7 @@ const App: React.FC = () => {
           netWorth={netWorth} balanceHistory={[]}
           onUpdateTask={()=>{}} goals={store.goals}
           partners={store.partners} onSetView={store.setView} onSelectGoal={setSelectedGoal}
+          onEnterFocus={store.enterFocusMode}
         />
       )}
       {store.view === AppView.FINANCE && (
@@ -107,6 +113,7 @@ const App: React.FC = () => {
         />
       )}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
+      {store.view === AppView.FOCUS && <FocusView task={focusedTask} onExit={store.exitFocusMode} />}
       {showWizard && <GoalWizard values={[]} onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}
     </Layout>
   );

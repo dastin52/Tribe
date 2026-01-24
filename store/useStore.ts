@@ -20,6 +20,7 @@ export function useStore() {
   const [goals, setGoals] = useState<YearGoal[]>(SAMPLE_GOALS);
   const [subgoals, setSubgoals] = useState<SubGoal[]>(SAMPLE_SUBGOALS);
   const [transactions, setTransactions] = useState<Transaction[]>(SAMPLE_TRANSACTIONS);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   
   const [gameState, setGameState] = useState<GameState>(() => {
     const savedLobby = typeof window !== 'undefined' ? localStorage.getItem('tribe_active_lobby') : null;
@@ -85,7 +86,6 @@ export function useStore() {
     const tg = (window as any).Telegram?.WebApp;
     if (tg) {
       tg.ready();
-      // Telegram Mini App start parameters are in initDataUnsafe.start_param
       const startParam = tg.initDataUnsafe?.start_param;
       if (startParam) {
         const isPartner = startParam.startsWith('P_');
@@ -100,14 +100,21 @@ export function useStore() {
   const startGame = () => {
     const me = gameState.players.find(p => p.id === user.id);
     const nextReady = !me?.isReady;
-    
-    // Оптимистичное обновление
     setGameState(prev => ({
       ...prev,
       players: prev.players.map(p => p.id === user.id ? { ...p, isReady: nextReady } : p)
     }));
-
     syncWithServer({ player: { id: user.id, isReady: nextReady } }, true);
+  };
+
+  const enterFocusMode = (taskId: string) => {
+    setActiveTaskId(taskId);
+    setView(AppView.FOCUS);
+  };
+
+  const exitFocusMode = () => {
+    setActiveTaskId(null);
+    setView(AppView.DASHBOARD);
   };
 
   const forceStartGame = () => {
@@ -118,11 +125,7 @@ export function useStore() {
     const tg = (window as any).Telegram?.WebApp;
     const lobbyCode = gameState.lobbyId;
     const prefix = type === 'partner' ? 'P_' : 'G_';
-    
-    // КРИТИЧЕСКИЙ ФИКС: Формат ссылки для Mini App
-    // /app?startapp=ПАРАМЕТР - это единственный надежный способ
     const botLink = `https://t.me/tribe_goals_bot/app?startapp=${prefix}${lobbyCode}`;
-    
     const text = type === 'partner' 
       ? `Присоединяйся к моему Племени! 🤝 Стань партнером.\nСсылка:` 
       : `Заходи на Арену! 🚀 Поиграем.\nСсылка:`;
@@ -143,7 +146,7 @@ export function useStore() {
   }, [view, gameState.lobbyId]);
 
   return {
-    user, view, setView, goals, subgoals, 
+    user, view, setView, goals, subgoals, activeTaskId, enterFocusMode, exitFocusMode,
     partners: (gameState.players || []).filter(p => p.id !== user.id && !p.isBot).map(p => ({ id: p.id, name: p.name, role: 'teammate', avatar: p.avatar })),
     pendingRequests: (gameState.pendingPlayers || []).map(p => ({ id: p.id, name: p.name, role: 'teammate', avatar: p.avatar })),
     transactions, gameState,
