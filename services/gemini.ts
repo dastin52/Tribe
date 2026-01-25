@@ -1,7 +1,52 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
+const GAME_RULES_KNOWLEDGE = `
+Ты - Магистр Игры Tribe Arena. Твоя задача - вести игрока, обучать его финансовой грамотности и объяснять правила.
+ПРАВИЛА ИГРЫ:
+1. ХОДЫ: Игрок получает ходы (Dice Rolls), только выполняя свои РЕАЛЬНЫЕ цели в приложении Tribe. 1 выполненная подцель = 1 ход.
+2. ПОЛЕ: 24 клетки. Есть Активы (бизнесы), Банк (депозиты), Налоги и События.
+3. АКТИВЫ: Можно купить (налог 5% от цены). Можно улучшать (Lvl 1-5). 
+   - Lvl 4 дает статус "ОЭЗ" (Особая Экономическая Зона) -> 0% налога на ренту с этого актива.
+4. АКЦИИ: Можно покупать доли в компаниях. Цена зависит от индекса сектора (Tech, Web3 и т.д.).
+5. НАЛОГИ: 
+   - Налог на покупку актива: 5%.
+   - Налог на прибыль с продажи акций (НДФЛ): 13%.
+6. ОПТИМИЗАЦИЯ НАЛОГОВ: 
+   - Реинвестирование (покупка нового актива сразу после продажи) снижает налог.
+   - Благотворительность (вклад в Племя) списывает налоги.
+   - Достижение Lvl 4 актива обнуляет его налоги.
+7. РИСКИ: ИИ-события могут обрушить сектор. Диверсифицируй портфель.
+8. БАНК: Вклад под 15% на 5 ходов. Защита от инфляции.
+
+Твой стиль: Мудрый наставник, лаконичный, используешь финансовые термины, мотивируешь достигать реальных целей для продвижения в игре.
+`;
+
 export const geminiService = {
+  async chatWithGameMaster(userMessage: string, history: {role: string, parts: any[]}[], gameState: any) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const context = `Текущее состояние игрока: Капитал ${gameState.cash} руб, Позиция ${gameState.position}, Активов ${gameState.ownedAssetsCount}. 
+      Рынок: ${JSON.stringify(gameState.marketIndices)}.`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          { role: 'user', parts: [{ text: GAME_RULES_KNOWLEDGE + "\n" + context }] },
+          ...history,
+          { role: 'user', parts: [{ text: userMessage }] }
+        ],
+        config: {
+          temperature: 0.7,
+          maxOutputTokens: 250,
+        }
+      });
+      return response.text;
+    } catch (e) {
+      return "Связь с Магистром прервана. Проверь свои активы и попробуй позже.";
+    }
+  },
+
   async getDailyBriefing(goals: any[], financials: any, energyStatus: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -17,6 +62,37 @@ export const geminiService = {
       return response.text;
     } catch (e) {
       return "Сегодня отличный день, чтобы закрыть одну маленькую задачу.";
+    }
+  },
+
+  async getGameMasterEvent(players: any[], history: string[]) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Ты - Магистр Игры "Tribe Arena". 
+        Игроки: ${JSON.stringify(players.map(p => ({ name: p.name, cash: p.cash })))}.
+        История: ${JSON.stringify(history.slice(0, 5))}.
+        Придумай случайное событие (кризис, хайп, налоги, подарок).
+        Оно должно влиять на определенный сектор (tech, realestate, health, energy, web3, edu).
+        Верни JSON: { "title": string, "description": string, "sector": string, "multiplier": number, "duration": number }`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              sector: { type: Type.STRING },
+              multiplier: { type: Type.NUMBER },
+              duration: { type: Type.NUMBER }
+            }
+          }
+        }
+      });
+      return JSON.parse(response.text || '{}');
+    } catch (e) {
+      return { title: "Стабильность", description: "На рынке без перемен.", sector: "tech", multiplier: 1, duration: 1 };
     }
   },
 

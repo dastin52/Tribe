@@ -10,6 +10,7 @@ export const INITIAL_USER: User = {
   xp: 0,
   level: 1,
   streak: 0,
+  game_rolls: 0, // Стартовое количество ходов
   last_active: now.toISOString(),
   financials: {
     total_assets: 0,

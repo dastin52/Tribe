@@ -1,18 +1,40 @@
 
+
 export type GoalCategory = "finance" | "sport" | "growth" | "work" | "other";
 export type PartnerRole = 'accomplice' | 'guardian' | 'sensei' | 'teammate' | 'navigator' | 'roaster';
+
+// Constants for financial logic
+export const TAX_RATE = 0.13; // 13% tax on profit
+export const PURCHASE_TAX = 0.05; // 5% tax on asset purchase
+
+export interface StockHolding {
+  cellId: number;
+  shares: number;
+  avgPurchasePrice: number;
+}
 
 export interface GameDeposit {
   id: string;
   amount: number;
   remainingTurns: number;
   interestRate: number;
+  cellId: number;
 }
 
 export interface GameReaction {
   playerId: string;
   emoji: string;
   timestamp: number;
+}
+
+export interface WorldEvent {
+  title: string;
+  description: string;
+  effect: {
+    sector?: string;
+    multiplier: number;
+    duration: number;
+  };
 }
 
 export interface GamePlayer {
@@ -26,27 +48,29 @@ export interface GamePlayer {
   isBot?: boolean;
   deposits: GameDeposit[];
   ownedAssets: number[]; 
+  assetLevels: Record<number, number>; // cellId -> level (1-5)
+  portfolio: StockHolding[]; // Акции игрока
+  taxCredits: number; // Налоговые льготы (оптимизация)
   isHost?: boolean;
-  status?: 'pending' | 'accepted'; // Для системы одобрения в племя
+  status?: 'pending' | 'accepted';
 }
 
 export interface GameState {
   players: GamePlayer[];
-  pendingPlayers: GamePlayer[]; // Те, кто "постучался"
+  pendingPlayers: GamePlayer[];
   currentPlayerIndex: number;
   history: string[];
   turnNumber: number;
-  ownedAssets: Record<number, string>;
+  ownedAssets: Record<number, string>; // cellId -> playerId
   reactions: GameReaction[];
   lobbyId: string | null;
   status: 'lobby' | 'playing' | 'finished';
   lastRoll: number | null;
   hostId?: string;
+  marketIndices: Record<string, number>; // sector -> multiplier (e.g. 1.2)
+  activeWorldEvent: WorldEvent | null;
 }
 
-/**
- * FinancialSnapshot defines the structure of a user's financial state at a given time.
- */
 export interface FinancialSnapshot {
   total_assets: number;
   total_debts: number;
@@ -63,8 +87,8 @@ export interface User {
   level: number;
   streak?: number;
   last_active?: string;
-  // Use the dedicated FinancialSnapshot interface for consistency
   financials?: FinancialSnapshot;
+  game_rolls: number;
   energy_profile: {
     peak_hours: number[];
     low_energy_hours?: number[];
@@ -82,12 +106,13 @@ export enum AppView {
   FOCUS = 'focus'
 }
 
-export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison';
+export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison' | 'bank';
 export interface BoardCell {
   id: number;
   type: CellType;
   district?: string;
   title: string;
+  description?: string;
   cost?: number;
   rent?: number;
   icon: string;
@@ -167,9 +192,6 @@ export interface Value {
   priority: number;
 }
 
-/**
- * Meeting interface for synchronization sessions between partners.
- */
 export interface Meeting {
   id: string;
   title: string;
@@ -177,9 +199,6 @@ export interface Meeting {
   partner_id: string;
 }
 
-/**
- * Debt interface to track financial obligations.
- */
 export interface Debt {
   id: string;
   title: string;
@@ -190,9 +209,6 @@ export interface Debt {
   due_date?: string;
 }
 
-/**
- * Subscription interface for tracking recurring expenses.
- */
 export interface Subscription {
   id: string;
   title: string;

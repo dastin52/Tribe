@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Meeting, SubGoal, YearGoal, AccountabilityPartner, AppView } from '../types';
 import { geminiService } from '../services/gemini';
+import { ResponsiveContainer, AreaChart, Area, XAxis, ReferenceLine, Tooltip } from 'recharts';
 
 interface DashboardViewProps {
   user: User;
@@ -11,7 +12,7 @@ interface DashboardViewProps {
   setBalanceVisible: (v: boolean) => void;
   netWorth: number;
   balanceHistory: any[];
-  onUpdateTask: (id: string, val: number, force: boolean) => void;
+  onUpdateTask: (id: string, val: number) => void;
   goals: YearGoal[];
   partners: AccountabilityPartner[];
   onSetView: (view: AppView) => void;
@@ -24,8 +25,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [briefing, setBriefing] = useState<string>('Загружаю твой план...');
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const currentHour = new Date().getHours();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const currentHour = currentTime.getHours();
   const isPeak = user.energy_profile.peak_hours.includes(currentHour);
+  const isLow = user.energy_profile.low_energy_hours?.includes(currentHour);
 
   useEffect(() => {
     const fetchBriefing = async () => {
@@ -33,7 +42,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       setBriefing(text);
     };
     if (goals.length > 0) fetchBriefing();
-  }, [goals.length]);
+  }, [goals.length, isPeak]);
+
+  const energyChartData = useMemo(() => {
+    return Array.from({ length: 24 }).map((_, h) => {
+      let level = 50;
+      if (user.energy_profile.peak_hours.includes(h)) level = 90;
+      if (user.energy_profile.low_energy_hours?.includes(h)) level = 20;
+      return { hour: h, level, name: `${h}:00` };
+    });
+  }, [user.energy_profile]);
 
   const calendarDays = useMemo(() => {
     const days = [];
@@ -58,19 +76,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     <div className="space-y-8 animate-fade-in pb-12">
       <div className="flex justify-between items-center px-2">
          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg border-2 border-white">
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg border-2 border-white overflow-hidden">
                {user.photo_url ? <img src={user.photo_url} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user-ninja"></i>}
             </div>
             <div>
                <h2 className="text-xl font-black text-slate-900 leading-none italic uppercase">{user.name}</h2>
                <div className="flex items-center gap-2 mt-1">
                   <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded italic">УРОВЕНЬ {user.level}</span>
-                  <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded italic ${isPeak ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
-                    {isPeak ? '🔥 ФОКУС' : '💤 ВОССТАНОВЛЕНИЕ'}
+                  <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded italic ${isPeak ? 'bg-amber-100 text-amber-600' : isLow ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400'}`}>
+                    {isPeak ? '🔥 ФОКУС' : isLow ? '💤 СПАД' : '⚙️ НОРМА'}
                   </span>
                </div>
             </div>
          </div>
+         <button onClick={() => onSetView(AppView.SOCIAL)} className="bg-slate-900 px-4 py-2 rounded-2xl flex items-center gap-2 border-2 border-slate-800 shadow-xl group">
+            <i className="fa-solid fa-bolt text-amber-400 animate-pulse"></i>
+            <span className="text-white font-black text-xs italic">{user.game_rolls} ХОДОВ</span>
+         </button>
       </div>
 
       <section className="space-y-4">
@@ -93,6 +115,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Energy Profile Radar Section */}
+      <section className="mx-1 p-6 bg-slate-900 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-[50px]"></div>
+         <div className="flex justify-between items-start relative z-10 mb-6">
+            <div>
+               <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] italic">Энерго-профиль</h3>
+               <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">Твои биоритмы на сегодня</p>
+            </div>
+            <div className="text-right">
+               <span className="text-xl font-black italic">{currentTime.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+         </div>
+
+         <div className="h-28 w-full relative z-10 -mx-4">
+            <ResponsiveContainer width="100%" height="100%">
+               <AreaChart data={energyChartData}>
+                  <defs>
+                     <linearGradient id="energyGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.5}/>
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                     </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="level" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#energyGradient)" animationDuration={1500} />
+                  <ReferenceLine x={currentHour} stroke="#f59e0b" strokeWidth={2} strokeDasharray="3 3" />
+                  <Tooltip content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return <div className="bg-slate-800 border border-white/10 p-2 rounded-lg text-[9px] font-black italic">{payload[0].payload.name}</div>;
+                      }
+                      return null;
+                    }}
+                  />
+               </AreaChart>
+            </ResponsiveContainer>
+         </div>
+
+         <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center relative z-10">
+            <div className="flex items-center gap-2">
+               <div className={`w-2 h-2 rounded-full ${isPeak ? 'bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]' : isLow ? 'bg-rose-500' : 'bg-slate-600'}`}></div>
+               <span className="text-[9px] font-black uppercase tracking-widest italic text-slate-400">
+                  {isPeak ? 'Время для хардкора' : isLow ? 'Заряди батарейку' : 'Штатный режим'}
+               </span>
+            </div>
+            <i className="fa-solid fa-bolt-lightning text-indigo-500 opacity-30"></i>
+         </div>
       </section>
 
       <div className="p-6 bg-indigo-600 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden group mx-1">
@@ -133,8 +201,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ) : filteredTasks.map(sg => (
               <div key={sg.id} className="p-5 bg-white rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between group active:scale-98 transition-all mx-1">
                 <div className="flex items-center gap-4 flex-1">
-                   <button onClick={() => onUpdateTask(sg.id, sg.target_value, partners.length === 0)} className={`w-12 h-12 rounded-2xl ${partners.length === 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'} flex items-center justify-center shadow-sm active:scale-90 transition-all`}>
-                      <i className={`fa-solid ${partners.length === 0 ? 'fa-check-double' : 'fa-paper-plane'} text-sm`}></i>
+                   <button onClick={() => onUpdateTask(sg.id, sg.target_value)} className={`w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm active:scale-90 transition-all`}>
+                      <i className={`fa-solid fa-check-double text-sm`}></i>
                    </button>
                    <div className="flex-1">
                       <h4 className="font-bold text-slate-800 text-sm leading-tight italic uppercase">{sg.title}</h4>
