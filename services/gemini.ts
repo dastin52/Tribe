@@ -1,209 +1,97 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const GAME_RULES_KNOWLEDGE = `
-Ты - Магистр Игры Tribe Arena. Твоя задача - вести игрока, обучать его финансовой грамотности и объяснять правила.
-ПРАВИЛА ИГРЫ:
-1. ХОДЫ: Игрок получает ходы (Dice Rolls), только выполняя свои РЕАЛЬНЫЕ цели в приложении Tribe. 1 выполненная подцель = 1 ход.
-2. ПОЛЕ: 24 клетки. Есть Активы (бизнесы), Банк (депозиты), Налоги и События.
-3. АКТИВЫ: Можно купить (налог 5% от цены). Можно улучшать (Lvl 1-5). 
-   - Lvl 4 дает статус "ОЭЗ" (Особая Экономическая Зона) -> 0% налога на ренту с этого актива.
-4. АКЦИИ: Можно покупать доли в компаниях. Цена зависит от индекса сектора (Tech, Web3 и т.д.).
-5. НАЛОГИ: 
-   - Налог на покупку актива: 5%.
-   - Налог на прибыль с продажи акций (НДФЛ): 13%.
-6. ОПТИМИЗАЦИЯ НАЛОГОВ: 
-   - Реинвестирование (покупка нового актива сразу после продажи) снижает налог.
-   - Благотворительность (вклад в Племя) списывает налоги.
-   - Достижение Lvl 4 актива обнуляет его налоги.
-7. РИСКИ: ИИ-события могут обрушить сектор. Диверсифицируй портфель.
-8. БАНК: Вклад под 15% на 5 ходов. Защита от инфляции.
+const NAVIGATOR_SYSTEM_PROMPT = `
+Ты — Tribe AI, Навигатор Жизни.
+Твоя цель: помогать пользователю двигаться устойчиво, а не быстро.
 
-Твой стиль: Мудрый наставник, лаконичный, используешь финансовые термины, мотивируешь достигать реальных целей для продвижения в игре.
+ФИЛОСОФИЯ:
+- Энергия важнее мотивации.
+- Осознанный пропуск лучше выгорания.
+- 1 точный шаг лучше 10 хаотичных.
+
+СТИЛЬ:
+- Кратко, тепло, спокойно.
+- Без пафоса и клише.
+- Честно, иногда с мягкой иронией.
+- Ты не приказываешь и не стыдишь.
+
+ТВОЯ ЗАДАЧА ПРИ ПОСТАНОВКЕ ЦЕЛИ:
+1. Выявить core_intent (истинный смысл).
+2. Определить constraints (реальные ограничения ресурсов).
+3. Сформулировать success_definition (что есть успех).
+4. Создать MOS (Minimum Operational Step) — микро-действие на "плохой день".
+
+ТВОЯ ЗАДАЧА ПРИ ДЕКОМПОЗИЦИИ:
+Разбей цель на Milestones (этапы смысла), а затем на Tasks.
+Каждая задача должна иметь тип: мышление, действие или привычка.
+Не планируй более 1-2 задач в день.
 `;
 
 export const geminiService = {
-  async chatWithGameMaster(userMessage: string, history: {role: string, parts: any[]}[], gameState: any) {
+  async getNavigatorInsight(step: number, data: any) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const context = `Текущее состояние игрока: Капитал ${gameState.cash} руб, Позиция ${gameState.position}, Активов ${gameState.ownedAssetsCount}. 
-      Рынок: ${JSON.stringify(gameState.marketIndices)}.`;
+      let prompt = "";
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          { role: 'user', parts: [{ text: GAME_RULES_KNOWLEDGE + "\n" + context }] },
-          ...history,
-          { role: 'user', parts: [{ text: userMessage }] }
-        ],
-        config: {
-          temperature: 0.7,
-          maxOutputTokens: 250,
-        }
-      });
-      return response.text;
-    } catch (e) {
-      return "Связь с Магистром прервана. Проверь свои активы и попробуй позже.";
-    }
-  },
-
-  async getDailyBriefing(goals: any[], financials: any, energyStatus: string) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Ты - ИИ-советник системы Tribe. 
-        Цели: ${JSON.stringify(goals.map(g => g.title))}. 
-        Финансы: ${JSON.stringify(financials)}. 
-        Статус энергии: ${energyStatus}.
-        Дай ОДИН короткий совет (до 20 слов) на сегодня. 
-        Сфокусируйся на связи финансов и главной цели.`,
-      });
-      return response.text;
-    } catch (e) {
-      return "Сегодня отличный день, чтобы закрыть одну маленькую задачу.";
-    }
-  },
-
-  async getGameMasterEvent(players: any[], history: string[]) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Ты - Магистр Игры "Tribe Arena". 
-        Игроки: ${JSON.stringify(players.map(p => ({ name: p.name, cash: p.cash })))}.
-        История: ${JSON.stringify(history.slice(0, 5))}.
-        Придумай случайное событие (кризис, хайп, налоги, подарок).
-        Оно должно влиять на определенный сектор (tech, realestate, health, energy, web3, edu).
-        Верни JSON: { "title": string, "description": string, "sector": string, "multiplier": number, "duration": number }`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              sector: { type: Type.STRING },
-              multiplier: { type: Type.NUMBER },
-              duration: { type: Type.NUMBER }
-            }
-          }
-        }
-      });
-      return JSON.parse(response.text || '{}');
-    } catch (e) {
-      return { title: "Стабильность", description: "На рынке без перемен.", sector: "tech", multiplier: 1, duration: 1 };
-    }
-  },
-
-  async getFocusMantra(taskTitle: string) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Сгенерируй одну мощную, короткую мантру (до 7 слов) для глубокой концентрации на задаче: "${taskTitle}". 
-        Стиль: Стоицизм или Киберпанк. Без знаков препинания в конце.`,
-      });
-      return response.text;
-    } catch (e) {
-      return "Твое внимание — твой главный актив";
-    }
-  },
-
-  async getFinanceAdvice(txs: any[], goals: any[]) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Проанализируй транзакции: ${JSON.stringify(txs.slice(-10))}. 
-        Учитывая финансовые цели: ${JSON.stringify(goals.filter(g => g.category === 'finance'))}.
-        Дай ОДИН конкретный совет по оптимизации бюджета для достижения этих целей (до 25 слов).`,
-      });
-      return response.text;
-    } catch (e) {
-      return "Следи за мелкими расходами, они крадут твое будущее.";
-    }
-  },
-
-  async generateGoalVision(title: string, description: string) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `A cinematic, highly detailed, inspiring 4k image representing the successful achievement of the goal: "${title}". Context: ${description}. Digital art style, vibrant colors, epic composition, motivation theme.`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: prompt }] },
-        config: { imageConfig: { aspectRatio: "16:9" } }
-      });
-
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
-        }
+      if (step === 1) { // Слой: Смысл
+        prompt = `Пользователь хочет: "${data.title}" (${data.category}). 
+        Задай ОДИН точный вопрос, чтобы выявить истинный смысл (core_intent). Почему это важно сейчас?`;
+      } else if (step === 2) { // Слой: Реальность
+        prompt = `Цель: "${data.title}". Смысл: "${data.motivation}". 
+        Спроси об одном главном ограничении (время/энергия) или риске, который обычно мешает пользователю.`;
+      } else if (step === 3) { // Слой: Контракт
+        prompt = `Цель: "${data.title}". Контекст: ${JSON.stringify(data)}.
+        Предложи ОДИН вариант MOS (минимальный шаг) и ОДИН вариант критерия успеха. 
+        Верни JSON: { "mos": string, "success": string, "insight": string }`;
       }
-      return null;
-    } catch (e) {
-      console.error("Image generation failed", e);
-      return null;
-    }
-  },
-
-  async getCoachingInsight(category: string, title: string, userMessage?: string) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = userMessage 
-        ? `Пользователь хочет: "${title}" (${category}). Его мотивация: "${userMessage}". 
-           Дай ОДНУ короткую пометку (до 15 слов) и предложи идеальный срок (в месяцах) для этой цели. 
-           Ответь строго в JSON: { "insight": string, "suggestedMonths": number }`
-        : `Пользователь хочет: "${title}" (${category}). 
-           Задай ОДИН короткий, бьющий в цель вопрос, чтобы он понял истинную причину этой цели (до 10 слов).
-           Ответь строго в JSON: { "question": string }`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: prompt,
+        contents: NAVIGATOR_SYSTEM_PROMPT + "\n" + prompt,
         config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              insight: { type: Type.STRING },
-              question: { type: Type.STRING },
-              suggestedMonths: { type: Type.NUMBER }
-            }
-          }
+          responseMimeType: step === 3 ? "application/json" : "text/plain"
         }
       });
-      return JSON.parse(response.text || '{}');
-    } catch (error) {
-      return { insight: "Действуй решительно.", suggestedMonths: 6, question: "Каков твой первый шаг?" };
+
+      return step === 3 ? JSON.parse(response.text || '{}') : response.text;
+    } catch (e) {
+      return step === 3 ? { mos: "Просто открыть приложение", success: "Регулярность", insight: "Главное - начать." } : "Что для тебя будет самым сложным в этом пути?";
     }
   },
 
-  async decomposeGoal(goalTitle: string, metric: string, target: number, category: string, description: string) {
+  async decomposeGoalNavigator(goal: any) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Декомпозируй цель "${goalTitle}" (${target} ${metric}). 
-        Контекст: ${description}. Категория: ${category}.
-        Разбей на 3 конкретных подцели (milestones). Без воды. 
-        Верни JSON.`,
+        contents: NAVIGATOR_SYSTEM_PROMPT + `\nДекомпозируй цель: "${goal.title}". 
+        Тип: ${goal.goal_type}. Смысл: ${goal.core_intent}. Ограничения: ${goal.constraints}.
+        Создай 3 Milestone и для первого Milestone предложи 2 атомарные задачи.
+        Верни JSON с четкой структурой.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              subGoals: {
+              milestones: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
                     title: { type: Type.STRING },
-                    target_value: { type: Type.NUMBER },
-                    weight: { type: Type.NUMBER }
-                  },
-                  required: ["title", "target_value", "weight"]
+                    tasks: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          title: { type: Type.STRING },
+                          effort_type: { type: Type.STRING, description: "thinking | action | habit" },
+                          weight: { type: Type.NUMBER }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -211,8 +99,59 @@ export const geminiService = {
         }
       });
       return JSON.parse(response.text || '{}');
-    } catch (error) {
-      return { subGoals: [{ title: "Начать реализацию", target_value: target, weight: 100 }] };
+    } catch (e) {
+      return { milestones: [] };
+    }
+  },
+
+  async getMOSAdvice(goal: any, energyStatus: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: NAVIGATOR_SYSTEM_PROMPT + `\nУ пользователя статус энергии: ${energyStatus}. 
+        Цель: ${goal.title}. Актуализируй MOS (минимальный шаг) на сегодня. Максимум 5 слов.`
+      });
+      return response.text;
+    } catch (e) {
+      return "Сделай один маленький шаг.";
+    }
+  },
+
+  // Added method for Game Master interaction in Arena
+  async chatWithGameMaster(message: string, history: any[], context: any) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          ...history,
+          { role: 'user', parts: [{ text: `Контекст игрока: ${JSON.stringify(context)}. Сообщение: ${message}` }] }
+        ],
+        config: {
+          systemInstruction: "Ты - Магистр Арены, мудрый гейм-мастер финансовой игры Tribe. Отвечай кратко, с легкой иронией, помогай советами по стратегии и правилам. Твой стиль: загадочный, но поддерживающий."
+        }
+      });
+      return response.text || "Магистр временно недоступен.";
+    } catch (e) {
+      return "Энергия Арены нестабильна. Попробуй задать вопрос позже.";
+    }
+  },
+
+  // Added method for Focus Mode mantras
+  async getFocusMantra(taskTitle: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Сформулируй короткую (до 7 слов) глубокую мантру для полного погружения в задачу: "${taskTitle}".`,
+        config: {
+          systemInstruction: "Ты - Tribe AI. Создаешь вдохновляющие, но приземленные мантры для глубокого фокуса и работы в потоке."
+        }
+      });
+      return response.text || "Фокус - твое единственное оружие.";
+    } catch (e) {
+      return "Будь здесь и сейчас.";
     }
   }
 };

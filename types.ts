@@ -1,74 +1,63 @@
 
-
 export type GoalCategory = "finance" | "sport" | "growth" | "work" | "other";
-export type PartnerRole = 'accomplice' | 'guardian' | 'sensei' | 'teammate' | 'navigator' | 'roaster';
+export type PartnerRole = 'observer' | 'navigator' | 'guardian' | 'motivator';
+export type GoalType = 'learning' | 'project' | 'habit' | 'transformation' | 'financial';
+export type EffortType = 'thinking' | 'action' | 'habit';
+export type GoalPhase = 'acceleration' | 'work' | 'fatigue' | 'pause' | 'finish';
 
-// Constants for financial logic
-export const TAX_RATE = 0.13; // 13% tax on profit
-export const PURCHASE_TAX = 0.05; // 5% tax on asset purchase
-
-export interface StockHolding {
-  cellId: number;
-  shares: number;
-  avgPurchasePrice: number;
-}
-
-export interface GameDeposit {
+export interface MOS {
   id: string;
-  amount: number;
-  remainingTurns: number;
-  interestRate: number;
-  cellId: number;
-}
-
-export interface GameReaction {
-  playerId: string;
-  emoji: string;
-  timestamp: number;
-}
-
-export interface WorldEvent {
   title: string;
-  description: string;
-  effect: {
-    sector?: string;
-    multiplier: number;
-    duration: number;
-  };
+  is_completed: boolean;
 }
 
-export interface GamePlayer {
+export interface YearGoal {
   id: string;
-  name: string;
-  avatar: string;
-  position: number;
-  cash: number;
-  isBankrupt: boolean;
-  isReady: boolean;
-  isBot?: boolean;
-  deposits: GameDeposit[];
-  ownedAssets: number[]; 
-  assetLevels: Record<number, number>; // cellId -> level (1-5)
-  portfolio: StockHolding[]; // Акции игрока
-  taxCredits: number; // Налоговые льготы (оптимизация)
-  isHost?: boolean;
-  status?: 'pending' | 'accepted';
+  category: GoalCategory;
+  goal_type: GoalType;
+  phase: GoalPhase;
+  title: string;
+  core_intent: string; // Зачем эта цель существует
+  success_definition: string; // Что считается успехом (мин/норма/макс)
+  constraints: string; // Ограничения времени/энергии
+  risk_factors: string; // Почему может сорваться
+  description?: string;
+  metric: string;
+  target_value: number;
+  current_value: number;
+  start_date: string;
+  end_date: string;
+  status: "active" | "completed";
+  is_private: boolean;
+  logs: ProgressLog[];
+  mos?: MOS; // Minimum Operational Step
 }
 
-export interface GameState {
-  players: GamePlayer[];
-  pendingPlayers: GamePlayer[];
-  currentPlayerIndex: number;
-  history: string[];
-  turnNumber: number;
-  ownedAssets: Record<number, string>; // cellId -> playerId
-  reactions: GameReaction[];
-  lobbyId: string | null;
-  status: 'lobby' | 'playing' | 'finished';
-  lastRoll: number | null;
-  hostId?: string;
-  marketIndices: Record<string, number>; // sector -> multiplier (e.g. 1.2)
-  activeWorldEvent: WorldEvent | null;
+export interface SubGoal {
+  id: string;
+  year_goal_id: string;
+  title: string;
+  effort_type: EffortType;
+  target_value: number;
+  current_value: number;
+  metric: string;
+  deadline: string;
+  weight: number;
+  is_completed: boolean;
+}
+
+export interface ProgressLog {
+  id: string;
+  goal_id: string;
+  timestamp: string;
+  value: number;
+  is_verified: boolean;
+  verified_by?: string;
+  honesty_score?: 'yes' | 'partial' | 'no';
+  comment?: string;
+  user_id: string;
+  // Added rating property for goal assessment
+  rating?: number;
 }
 
 export interface FinancialSnapshot {
@@ -85,14 +74,16 @@ export interface User {
   photo_url?: string;
   xp: number;
   level: number;
+  game_rolls: number;
+  // Added optional streak and activity tracking
   streak?: number;
   last_active?: string;
-  financials?: FinancialSnapshot;
-  game_rolls: number;
   energy_profile: {
     peak_hours: number[];
-    low_energy_hours?: number[];
+    low_energy_hours: number[];
   };
+  // Updated financials to use structured snapshot
+  financials?: FinancialSnapshot;
 }
 
 export enum AppView {
@@ -106,97 +97,12 @@ export enum AppView {
   FOCUS = 'focus'
 }
 
-export type CellType = 'asset' | 'event' | 'tax' | 'start' | 'prison' | 'bank';
-export interface BoardCell {
-  id: number;
-  type: CellType;
-  district?: string;
-  title: string;
-  description?: string;
-  cost?: number;
-  rent?: number;
-  icon: string;
-}
-
-export interface ProgressLog {
-  id: string;
-  goal_id: string;
-  timestamp: string;
-  value: number;
-  confidence: number;
-  is_verified: boolean;
-  verified_by?: string;
-  comment?: string;
-  rating?: number;
-  user_id: string;
-}
-
-export interface YearGoal {
-  id: string;
-  category: GoalCategory;
-  value_id?: string;
-  title: string;
-  description?: string;
-  metric: string;
-  target_value: number;
-  current_value: number;
-  start_date?: string;
-  end_date?: string;
-  status: "active" | "completed";
-  confidence_level?: number;
-  difficulty?: number;
-  is_shared?: boolean;
-  is_private?: boolean;
-  image_url?: string;
-  logs: ProgressLog[];
-}
-
-export type TaskFrequency = 'once' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
-
-export interface SubGoal {
-  id: string;
-  year_goal_id: string;
-  title: string;
-  target_value: number;
-  current_value: number;
-  metric: string;
-  deadline: string;
-  weight?: number;
-  frequency?: TaskFrequency;
-  difficulty?: number;
-  is_completed?: boolean;
-}
-
 export interface Transaction {
   id: string;
   amount: number;
   type: 'income' | 'expense';
   category: string;
   timestamp: string;
-  note?: string;
-}
-
-export interface AccountabilityPartner {
-  id: string;
-  name: string;
-  role: PartnerRole;
-  avatar?: string;
-  xp?: number;
-  status?: 'pending' | 'accepted';
-}
-
-export interface Value {
-  id: string;
-  title: string;
-  description: string;
-  priority: number;
-}
-
-export interface Meeting {
-  id: string;
-  title: string;
-  timestamp: string;
-  partner_id: string;
 }
 
 export interface Debt {
@@ -216,3 +122,64 @@ export interface Subscription {
   period: 'monthly' | 'yearly';
   category: string;
 }
+
+export interface AccountabilityPartner {
+  id: string;
+  name: string;
+  role: PartnerRole;
+}
+
+export interface Value {
+  id: string;
+  title: string;
+  description: string;
+  priority: number;
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+}
+
+export interface BoardCell {
+  id: number;
+  type: 'start' | 'asset' | 'event' | 'tax' | 'bank' | 'prison';
+  title: string;
+  icon: string;
+  description: string;
+  district?: string;
+  cost?: number;
+  rent?: number;
+}
+
+export interface GamePlayer {
+  id: string;
+  name: string;
+  position: number;
+  cash: number;
+  isHost?: boolean;
+  isReady?: boolean;
+  isBot?: boolean;
+  ownedAssets: number[];
+  assetLevels: Record<number, number>;
+  portfolio: { cellId: number; shares: number }[];
+  status?: string;
+}
+
+export interface GameState {
+  players: GamePlayer[];
+  lobbyId: string | null;
+  status: 'lobby' | 'playing' | 'finished';
+  marketIndices: Record<string, number>;
+  activeWorldEvent: any | null;
+  ownedAssets: Record<number, string>;
+  history: string[];
+  turnNumber: number;
+  hostId?: string;
+  pendingPlayers?: GamePlayer[];
+  currentPlayerIndex?: number;
+}
+
+// Global financial constants
+export const TAX_RATE = 0.13;
+export const PURCHASE_TAX = 0.05;

@@ -12,44 +12,13 @@ import { SocialView } from './components/SocialView';
 import { SettingsView } from './components/SettingsView';
 import { FocusView } from './components/FocusView';
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp: any;
-    };
-  }
-}
-
 const App: React.FC = () => {
   const store = useStore();
   const [showWizard, setShowWizard] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<YearGoal | null>(null);
-  const [balanceVisible, setBalanceVisible] = useState(true);
-  
-  useEffect(() => {
-    if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
-    }
-  }, []);
-
-  const financials = store.user.financials || { total_assets: 0, total_debts: 0, monthly_income: 0, monthly_expenses: 0, currency: '₽' };
-  const netWorth = financials.total_assets - financials.total_debts;
-
-  const ikigaiData = useMemo(() => {
-    const counts = { finance: 0, sport: 0, growth: 0, work: 0, other: 0 };
-    store.goals.forEach(g => counts[g.category]++);
-    const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
-    return [
-      { name: 'Развитие', value: (counts.growth + counts.sport) / total * 100 + 5, color: '#f43f5e' },
-      { name: 'Работа', value: counts.work / total * 100 + 10, color: '#3b82f6' },
-      { name: 'Капитал', value: counts.finance / total * 100 + 15, color: '#10b981' },
-      { name: 'Племя', value: store.partners.length * 10 + 5, color: '#8b5cf6' },
-    ];
-  }, [store.goals, store.partners]);
 
   const todayTasks = useMemo(() => {
-    return store.subgoals.filter(sg => sg.current_value < sg.target_value);
+    return store.subgoals.filter(sg => !sg.is_completed);
   }, [store.subgoals]);
 
   const focusedTask = useMemo(() => {
@@ -67,10 +36,10 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Tribe</h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-loose">
-              Твоя операционная система <br/> достижений и капитала
+              Навигатор твоего развития <br/> и устойчивого роста
             </p>
           </div>
-          <button onClick={() => store.setView(AppView.DASHBOARD)} className="w-full py-5 bg-slate-900 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">Начать</button>
+          <button onClick={() => store.setView(AppView.DASHBOARD)} className="w-full py-5 bg-slate-900 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">Вступить в племя</button>
         </div>
       </div>
     );
@@ -80,41 +49,37 @@ const App: React.FC = () => {
     <Layout activeView={store.view} setView={store.setView}>
       {store.view === AppView.DASHBOARD && (
         <DashboardView 
-          user={store.user} meetings={[]} todayTasks={todayTasks} 
-          balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible}
-          netWorth={netWorth} balanceHistory={[]}
-          onUpdateTask={()=>{}} goals={store.goals}
-          partners={store.partners} onSetView={store.setView} onSelectGoal={setSelectedGoal}
+          user={store.user} 
+          todayTasks={todayTasks} 
+          goals={store.goals}
+          onSetView={store.setView}
           onEnterFocus={store.enterFocusMode}
+          onCompleteMOS={store.onCompleteMOS}
         />
       )}
       {store.view === AppView.FINANCE && (
-        <FinanceView financials={financials as any} transactions={store.transactions} debts={[]} subscriptions={[]} balanceVisible={balanceVisible} setBalanceVisible={setBalanceVisible} netWorth={netWorth} balanceHistory={[]} onAddTransaction={store.addTransaction} onAddDebt={()=>{}} onAddSubscription={()=>{}} goals={store.goals} />
+        <FinanceView financials={store.user.financials as any} transactions={store.transactions} debts={[]} subscriptions={[]} balanceVisible={true} setBalanceVisible={()=>{}} netWorth={0} balanceHistory={[]} onAddTransaction={()=>{}} onAddDebt={()=>{}} onAddSubscription={()=>{}} goals={store.goals} />
       )}
       {store.view === AppView.GOALS && <GoalsView goals={store.goals} onAddGoal={() => setShowWizard(true)} onSelectGoal={setSelectedGoal} />}
-      {store.view === AppView.ANALYTICS && <AnalyticsView goals={store.goals} partners={store.partners} ikigaiData={ikigaiData} onTogglePrivacy={()=>{}} transactions={store.transactions} currency={financials.currency} />}
       {store.view === AppView.SOCIAL && (
         <SocialView 
           gameState={store.gameState}
-          partners={store.partners}
-          pendingRequests={store.pendingRequests}
+          partners={[]}
+          pendingRequests={[]}
           rollDice={store.rollDice}
-          buyAsset={store.buyAsset}
-          generateInviteLink={store.generateInviteLink}
-          joinFakePlayer={store.joinFakePlayer}
-          startGame={store.startGame}
-          forceStartGame={store.forceStartGame}
-          joinLobbyManual={store.joinLobbyManual}
-          resetLobby={store.resetLobby}
-          kickPlayer={store.kickPlayer}
-          createNewLobby={store.createNewLobby}
-          approvePartner={store.approvePartner}
+          buyAsset={()=>{}}
+          buyStock={()=>{}}
+          sellStock={()=>{}}
+          upgradeAsset={()=>{}}
+          makeDeposit={()=>{}}
+          generateInviteLink={()=>{}}
           currentUserId={store.user.id}
         />
       )}
       {store.view === AppView.SETTINGS && <SettingsView user={store.user} onUpdate={store.updateUserInfo} onReset={store.resetData} />}
       {store.view === AppView.FOCUS && <FocusView task={focusedTask} onExit={store.exitFocusMode} />}
-      {showWizard && <GoalWizard values={[]} onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}
+      
+      {showWizard && <GoalWizard onCancel={() => setShowWizard(false)} onComplete={(g, s) => { store.addGoalWithPlan(g, s); setShowWizard(false); }} />}
     </Layout>
   );
 };
