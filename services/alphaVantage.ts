@@ -14,13 +14,12 @@ export interface HistoricalDataPoint {
   close: number;
 }
 
-const API_KEY = import.meta.env.VITE_ALPHA_VANTAGE_API_KEY || 'demo';
-const BASE_URL = 'https://www.alphavantage.co/query';
+const BASE_URL = '/api/alpha-vantage';
 
 export const alphaVantageService = {
   async getGlobalQuote(symbol: string): Promise<GlobalQuote | null> {
     try {
-      const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${API_KEY}`);
+      const response = await fetch(`${BASE_URL}?function=GLOBAL_QUOTE&symbol=${symbol}`);
       const data = await response.json();
       const quote = data['Global Quote'];
       
@@ -43,8 +42,7 @@ export const alphaVantageService = {
 
   async getHistoricalData(symbol: string): Promise<HistoricalDataPoint[]> {
     try {
-      // Using TIME_SERIES_MONTHLY_ADJUSTED for long term history
-      const response = await fetch(`${BASE_URL}?function=TIME_SERIES_MONTHLY_ADJUSTED&symbol=${symbol}&apikey=${API_KEY}`);
+      const response = await fetch(`${BASE_URL}?function=TIME_SERIES_MONTHLY_ADJUSTED&symbol=${symbol}`);
       const data = await response.json();
       const timeSeries = data['Monthly Adjusted Time Series'];
       

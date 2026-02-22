@@ -357,10 +357,12 @@ const AdviceSection: React.FC = () => {
     { symbol: 'SPY', name: 'S&P 500' },
     { symbol: 'AAPL', name: 'Apple' },
     { symbol: 'MSFT', name: 'Microsoft' },
-    { symbol: 'GOOGL', name: 'Google' },
-    { symbol: 'TSLA', name: 'Tesla' },
     { symbol: 'GLD', name: 'Gold' },
     { symbol: 'BTCUSD', name: 'Bitcoin' },
+    { symbol: 'SBER.ME', name: 'Сбербанк' },
+    { symbol: 'GAZP.ME', name: 'Газпром' },
+    { symbol: 'LKOH.ME', name: 'Лукойл' },
+    { symbol: 'YNDX', name: 'Яндекс' },
   ];
 
   const fetchData = async () => {
@@ -382,6 +384,9 @@ const AdviceSection: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const isRussian = selectedAsset.endsWith('.ME');
+  const currency = isRussian ? '₽' : '$';
 
   const calculation = useMemo(() => {
     if (!historicalData.length || !amount) return null;
@@ -419,8 +424,55 @@ const AdviceSection: React.FC = () => {
     };
   }, [historicalData, amount, years]);
 
+  const [pulseData, setPulseData] = useState<any[]>([]);
+  const [pulseLoading, setPulseLoading] = useState(false);
+
+  const fetchPulse = async () => {
+    setPulseLoading(true);
+    const pulseSymbols = ['SPY', 'BTCUSD', 'SBER.ME'];
+    const results = [];
+    for (const sym of pulseSymbols) {
+      const q = await alphaVantageService.getGlobalQuote(sym);
+      if (q) results.push(q);
+      // Small delay to avoid hitting rate limit too fast even if we are within 5/min
+      await new Promise(r => setTimeout(r, 500));
+    }
+    setPulseData(results);
+    setPulseLoading(false);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in px-1">
+      {/* Market Pulse */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-4">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Пульс рынка</h4>
+          <button 
+            onClick={fetchPulse} 
+            disabled={pulseLoading}
+            className="text-[9px] font-black text-indigo-600 uppercase italic flex items-center gap-1"
+          >
+            {pulseLoading ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className="fa-solid fa-rotate"></i>}
+            Обновить
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(pulseData.length > 0 ? pulseData : [
+            { symbol: 'SPY', price: '...', changePercent: '...' },
+            { symbol: 'BTC', price: '...', changePercent: '...' },
+            { symbol: 'SBER', price: '...', changePercent: '...' }
+          ]).map((p, i) => (
+            <div key={i} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm text-center">
+              <div className="text-[8px] font-black text-slate-400 uppercase mb-1">{p.symbol.split('.')[0]}</div>
+              <div className="text-[10px] font-black text-slate-900 italic">{p.price === '...' ? '...' : `${p.symbol.endsWith('.ME') ? '₽' : '$'}${p.price}`}</div>
+              <div className={`text-[7px] font-black italic ${p.changePercent?.startsWith('-') ? 'text-rose-500' : p.changePercent === '...' ? 'text-slate-300' : 'text-emerald-500'}`}>
+                {p.changePercent}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="p-8 bg-slate-900 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 italic mb-4">Финансовый калькулятор «Что если?»</h4>
@@ -474,13 +526,38 @@ const AdviceSection: React.FC = () => {
         </div>
       )}
 
+      {currentQuote && (
+        <div className="p-8 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-4 animate-fade-in">
+          <div className="flex justify-between items-center">
+            <h5 className="text-[10px] font-black text-slate-400 uppercase italic">Анализ рынка: {currentQuote.symbol}</h5>
+            <span className="text-[8px] font-black text-slate-300 uppercase italic">Обновлено: {currentQuote.latestTradingDay}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <span className="text-[8px] font-black text-slate-400 uppercase italic block mb-1">Цена</span>
+              <span className="text-xl font-black text-slate-900 italic">{currency}{currentQuote.price}</span>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <span className="text-[8px] font-black text-slate-400 uppercase italic block mb-1">Изм. за день</span>
+              <span className={`text-xl font-black italic ${currentQuote.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {currentQuote.changePercent}
+              </span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 italic px-2">
+            <span>Пред. закрытие: {currency}{currentQuote.previousClose}</span>
+            <span>Объем: {(currentQuote.volume / 1000000).toFixed(2)}M</span>
+          </div>
+        </div>
+      )}
+
       {calculation && (
         <div className="space-y-4 animate-scale-up">
           <div className="p-8 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-6">
             <div className="flex justify-between items-start">
               <div>
                 <h5 className="text-[10px] font-black text-slate-400 uppercase italic mb-1">Результат через {years} лет</h5>
-                <div className="text-3xl font-black text-slate-900 italic">${Math.round(calculation.finalValue).toLocaleString()}</div>
+                <div className="text-3xl font-black text-slate-900 italic">{currency}{Math.round(calculation.finalValue).toLocaleString()}</div>
               </div>
               <div className={`px-3 py-1 rounded-full text-[10px] font-black italic ${calculation.profit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                 {calculation.profit >= 0 ? '+' : ''}{Math.round(calculation.returnPercent)}%
@@ -490,19 +567,19 @@ const AdviceSection: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
               <div className="p-4 bg-slate-50 rounded-2xl">
                 <span className="text-[8px] font-black text-slate-400 uppercase italic block mb-1">Инвестиция в {selectedAsset}</span>
-                <span className="text-sm font-black text-slate-900 italic">+${Math.round(calculation.profit).toLocaleString()}</span>
+                <span className="text-sm font-black text-slate-900 italic">+{currency}{Math.round(calculation.profit).toLocaleString()}</span>
               </div>
               <div className="p-4 bg-indigo-50 rounded-2xl">
                 <span className="text-[8px] font-black text-indigo-400 uppercase italic block mb-1">Вклад в банке (8%)</span>
-                <span className="text-sm font-black text-indigo-900 italic">+${Math.round(calculation.bankProfit).toLocaleString()}</span>
+                <span className="text-sm font-black text-indigo-900 italic">+{currency}{Math.round(calculation.bankProfit).toLocaleString()}</span>
               </div>
             </div>
 
             <div className="p-4 bg-slate-900 rounded-2xl text-white">
               <p className="text-[9px] font-bold italic leading-relaxed opacity-80">
                 {calculation.profit > calculation.bankProfit 
-                  ? `Инвестиция в ${selectedAsset} принесла бы на $${Math.round(calculation.profit - calculation.bankProfit).toLocaleString()} больше, чем обычный вклад.`
-                  : `В данном случае банковский вклад оказался бы выгоднее на $${Math.round(calculation.bankProfit - calculation.profit).toLocaleString()}.`}
+                  ? `Инвестиция в ${selectedAsset} принесла бы на ${currency}${Math.round(calculation.profit - calculation.bankProfit).toLocaleString()} больше, чем обычный вклад.`
+                  : `В данном случае банковский вклад оказался бы выгоднее на ${currency}${Math.round(calculation.bankProfit - calculation.profit).toLocaleString()}.`}
               </p>
             </div>
           </div>
