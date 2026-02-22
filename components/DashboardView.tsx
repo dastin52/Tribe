@@ -32,7 +32,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const fetchBriefing = async () => {
       if (mainGoal) {
         const text = await geminiService.getMOSAdvice(mainGoal, 'Норма');
-        setBriefing(text);
+        setBriefing(text || 'Готов к новым свершениям!');
       }
     };
     fetchBriefing();

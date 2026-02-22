@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from 'recharts';
 import { Transaction, Debt, Subscription, FinancialSnapshot, YearGoal } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { alphaVantageService } from '../services/alphaVantage';
 
 const EXPENSE_CATEGORIES = ['Продукты', 'Транспорт', 'Жилье', 'Развлечения', 'Здоровье', 'Одежда', 'Связь', 'Подписки', 'Налоги', 'Спорт', 'Путешествия', 'Другое'];
 const DEBT_CATEGORIES = ['bank', 'card', 'friend', 'other'];
@@ -54,7 +55,7 @@ const CustomChartTooltip = ({ active, payload, label, currency }: any) => {
 export const FinanceView: React.FC<FinanceViewProps> = ({ 
   financials, transactions, debts, subscriptions, balanceVisible, setBalanceVisible, netWorth, balanceHistory, onAddTransaction, onAddDebt, onAddSubscription, goals 
 }) => {
-  const [activeTab, setActiveTab] = useState<'operations' | 'debts' | 'subscriptions' | 'planning'>('operations');
+  const [activeTab, setActiveTab] = useState<'operations' | 'debts' | 'subscriptions' | 'planning' | 'advice'>('operations');
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     amount: '',
@@ -131,10 +132,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
          </div>
       </header>
 
-      <div className="flex bg-slate-100 p-1 rounded-[2rem] mx-2">
-         {['operations', 'debts', 'subscriptions', 'planning'].map((id) => (
-           <button key={id} onClick={() => { setActiveTab(id as any); setIsAdding(false); }} className={`flex-1 py-3 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
-             {id === 'operations' ? 'Операции' : id === 'debts' ? 'Долги' : id === 'subscriptions' ? 'Подписки' : 'Свобода'}
+      <div className="flex bg-slate-100 p-1 rounded-[2rem] mx-2 overflow-x-auto no-scrollbar">
+         {['operations', 'debts', 'subscriptions', 'planning', 'advice'].map((id) => (
+           <button key={id} onClick={() => { setActiveTab(id as any); setIsAdding(false); }} className={`flex-1 py-3 px-4 rounded-[1.8rem] text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
+             {id === 'operations' ? 'Операции' : id === 'debts' ? 'Долги' : id === 'subscriptions' ? 'Подписки' : id === 'planning' ? 'Свобода' : 'Советы'}
            </button>
          ))}
       </div>
@@ -335,7 +336,207 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </div>
            </div>
         )}
+        {activeTab === 'advice' && (
+          <AdviceSection />
+        )}
       </div>
+    </div>
+  );
+};
+
+const AdviceSection: React.FC = () => {
+  const [selectedAsset, setSelectedAsset] = useState('SPY');
+  const [amount, setAmount] = useState('1000');
+  const [years, setYears] = useState(10);
+  const [historicalData, setHistoricalData] = useState<any[]>([]);
+  const [currentQuote, setCurrentQuote] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const assets = [
+    { symbol: 'SPY', name: 'S&P 500' },
+    { symbol: 'AAPL', name: 'Apple' },
+    { symbol: 'MSFT', name: 'Microsoft' },
+    { symbol: 'GOOGL', name: 'Google' },
+    { symbol: 'TSLA', name: 'Tesla' },
+    { symbol: 'GLD', name: 'Gold' },
+    { symbol: 'BTCUSD', name: 'Bitcoin' },
+  ];
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const quote = await alphaVantageService.getGlobalQuote(selectedAsset);
+      const history = await alphaVantageService.getHistoricalData(selectedAsset);
+      
+      if (!quote && !history.length) {
+        setError('Не удалось загрузить данные. Возможно, превышен лимит API (5 запросов в минуту).');
+      } else {
+        setCurrentQuote(quote);
+        setHistoricalData(history);
+      }
+    } catch (err) {
+      setError('Ошибка при загрузке данных');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculation = useMemo(() => {
+    if (!historicalData.length || !amount) return null;
+    
+    const initialAmount = parseFloat(amount);
+    const targetDate = new Date();
+    targetDate.setFullYear(targetDate.getFullYear() - years);
+    
+    // Find closest historical point
+    const startPoint = historicalData.find(d => new Date(d.date) >= targetDate) || historicalData[0];
+    const endPoint = historicalData[historicalData.length - 1];
+    
+    if (!startPoint || !endPoint) return null;
+
+    const shares = initialAmount / startPoint.close;
+    const finalValue = shares * endPoint.close;
+    const profit = finalValue - initialAmount;
+    const returnPercent = (profit / initialAmount) * 100;
+
+    // Bank deposit comparison (assuming 8% annual compound interest)
+    const bankRate = 0.08;
+    const bankFinalValue = initialAmount * Math.pow(1 + bankRate, years);
+    const bankProfit = bankFinalValue - initialAmount;
+
+    return {
+      initialAmount,
+      finalValue,
+      profit,
+      returnPercent,
+      bankFinalValue,
+      bankProfit,
+      startDate: startPoint.date,
+      startPrice: startPoint.close,
+      endPrice: endPoint.close
+    };
+  }, [historicalData, amount, years]);
+
+  return (
+    <div className="space-y-6 animate-fade-in px-1">
+      <div className="p-8 bg-slate-900 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
+        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300 italic mb-4">Финансовый калькулятор «Что если?»</h4>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-[8px] font-black text-slate-500 uppercase italic">Актив</label>
+              <select 
+                value={selectedAsset} 
+                onChange={e => setSelectedAsset(e.target.value)}
+                className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"
+              >
+                {assets.map(a => <option key={a.symbol} value={a.symbol} className="bg-slate-900">{a.name} ({a.symbol})</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[8px] font-black text-slate-500 uppercase italic">Срок (лет)</label>
+              <select 
+                value={years} 
+                onChange={e => setYears(parseInt(e.target.value))}
+                className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"
+              >
+                {[5, 10, 20, 30].map(y => <option key={y} value={y} className="bg-slate-900">{y} лет</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[8px] font-black text-slate-500 uppercase italic">Сумма вложения ($)</label>
+            <input 
+              type="number" 
+              value={amount} 
+              onChange={e => setAmount(e.target.value)}
+              className="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold outline-none focus:border-indigo-500"
+              placeholder="1000"
+            />
+          </div>
+          <button 
+            onClick={fetchData}
+            disabled={loading}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+          >
+            {loading ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className="fa-solid fa-calculator"></i>}
+            {loading ? 'Загрузка...' : 'Рассчитать'}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-[10px] font-bold italic text-center">
+          {error}
+        </div>
+      )}
+
+      {calculation && (
+        <div className="space-y-4 animate-scale-up">
+          <div className="p-8 bg-white rounded-[3rem] border border-slate-100 shadow-sm space-y-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h5 className="text-[10px] font-black text-slate-400 uppercase italic mb-1">Результат через {years} лет</h5>
+                <div className="text-3xl font-black text-slate-900 italic">${Math.round(calculation.finalValue).toLocaleString()}</div>
+              </div>
+              <div className={`px-3 py-1 rounded-full text-[10px] font-black italic ${calculation.profit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                {calculation.profit >= 0 ? '+' : ''}{Math.round(calculation.returnPercent)}%
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
+              <div className="p-4 bg-slate-50 rounded-2xl">
+                <span className="text-[8px] font-black text-slate-400 uppercase italic block mb-1">Инвестиция в {selectedAsset}</span>
+                <span className="text-sm font-black text-slate-900 italic">+${Math.round(calculation.profit).toLocaleString()}</span>
+              </div>
+              <div className="p-4 bg-indigo-50 rounded-2xl">
+                <span className="text-[8px] font-black text-indigo-400 uppercase italic block mb-1">Вклад в банке (8%)</span>
+                <span className="text-sm font-black text-indigo-900 italic">+${Math.round(calculation.bankProfit).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-900 rounded-2xl text-white">
+              <p className="text-[9px] font-bold italic leading-relaxed opacity-80">
+                {calculation.profit > calculation.bankProfit 
+                  ? `Инвестиция в ${selectedAsset} принесла бы на $${Math.round(calculation.profit - calculation.bankProfit).toLocaleString()} больше, чем обычный вклад.`
+                  : `В данном случае банковский вклад оказался бы выгоднее на $${Math.round(calculation.bankProfit - calculation.profit).toLocaleString()}.`}
+              </p>
+            </div>
+          </div>
+
+          {currentQuote && (
+            <div className="p-6 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                  <i className="fa-solid fa-chart-line text-xs"></i>
+                </div>
+                <div>
+                  <h5 className="font-black text-slate-800 text-xs uppercase italic">{currentQuote.symbol}</h5>
+                  <span className="text-[8px] font-black text-slate-400 uppercase italic">Текущая цена</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-black italic text-sm">${currentQuote.price}</div>
+                <div className={`text-[8px] font-black italic ${currentQuote.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {currentQuote.changePercent}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!calculation && !loading && !error && (
+        <div className="p-10 text-center space-y-4 opacity-40">
+          <i className="fa-solid fa-lightbulb text-4xl text-indigo-600"></i>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">
+            Выберите актив и срок, чтобы увидеть <br/> магию сложного процента
+          </p>
+        </div>
+      )}
     </div>
   );
 };

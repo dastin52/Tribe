@@ -63,7 +63,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
   // Chat with Game Master State
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{role: string, parts: {text: string}[]}>([]);
+  const [chatHistory, setChatHistory] = useState<{role: string, parts: {text: string}[]}[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
